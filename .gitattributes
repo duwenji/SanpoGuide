@@ -1,0 +1,6 @@
+# Normalise line endings in the repository; keep gradlew runnable on macOS/Linux/CI.
+* text=auto
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
