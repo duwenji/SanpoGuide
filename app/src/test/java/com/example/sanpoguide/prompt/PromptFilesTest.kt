@@ -21,8 +21,12 @@ class PromptFilesTest {
     private val samples: Map<String, List<Map<String, Any?>>> = mapOf(
         Prompts.Guide.SYSTEM to listOf(emptyMap()),
         Prompts.Guide.USER to listOf(
-            spot + mapOf("distance_m" to 45, "tags" to listOf("amenity=place_of_worship", "religion=shinto")),
-            spot + mapOf("distance_m" to null, "tags" to emptyList<String>()),
+            spot + mapOf(
+                "distance_m" to 45, "inside" to false,
+                "tags" to listOf("amenity=place_of_worship", "religion=shinto"),
+            ),
+            spot + mapOf("distance_m" to 0, "inside" to true, "tags" to listOf("leisure=park")),
+            spot + mapOf("distance_m" to null, "inside" to false, "tags" to emptyList<String>()),
         ),
         Prompts.Talk.SYSTEM to listOf(emptyMap()),
         Prompts.Talk.SITUATION to listOf(
