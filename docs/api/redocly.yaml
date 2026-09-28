@@ -1,0 +1,10 @@
+# npx @redocly/cli lint sanpo-messages.openapi.yaml
+extends:
+  - recommended
+rules:
+  # 社内・個人のプロジェクトでライセンスを定めていない
+  info-license: off
+  # 検出 API（/.well-known）は認証も入力もないため 4xx を返さない
+  operation-4xx-response: off
+  # EnvelopeHeader の if/then で、visibility ごとに必須の項目を切り替えている（項目は外側の properties で定義済み）
+  no-required-schema-properties-undefined: off

@@ -1,0 +1,1502 @@
+openapi: 3.1.0
+info:
+  title: SanpoGuide 秘密メッセージ サーバー API
+  version: 1.0.0
+  summary: 位置に紐づく秘密メッセージの管理と配信（API-001）
+  description: |
+    [secret-messages-api.md](../secret-messages-api.md)（API-001 1.0）を機械で読める形にしたもの。
+    文言・判断の根拠は契約書が正本で、食い違いがあれば契約書に合わせてこのファイルを直す。
+
+    - サーバーの実装方法と置き場所は問わない。このファイルと契約書の「サーバーの準拠要件」を満たせばよい
+    - 各操作の `x-sanpo-feature` は、その操作を実装するのに必要な機能（検出 API の `features`）。
+      `core` はすべての準拠サーバーが実装する。`features` に挙げない機能の操作には `400 unsupported_feature` を返す
+    - `x-sanpo-release` は、その機能が入る版（1 = 第 1 版、2 = 第 2 版）
+    - バイナリは base64url（パディングなし）、日時は ISO 8601（タイムゾーン付き）
+    - 知らない項目は無視する（`additionalProperties` は許可）。例外はフィルター式で、知らない項目・演算子は `invalid_filter`
+servers:
+  - url: '{baseUrl}'
+    description: 利用者がアプリの設定で指定した接続先
+    variables:
+      baseUrl:
+        default: https://messages.example.com
+security:
+  - bearerAuth: []
+tags:
+  - name: discovery
+    description: 検出
+  - name: auth
+    description: 認証
+  - name: accounts
+    description: アカウント（公開鍵）
+  - name: messages
+    description: メッセージの管理
+  - name: delivery
+    description: 配信（受信箱・受信フィルター・プッシュ）
+  - name: groups
+    description: グループ
+  - name: blobs
+    description: 添付ファイル
+  - name: reports
+    description: 通報
+  - name: admin
+    description: 運営（第 2 版）
+
+paths:
+  /.well-known/sanpo-messages:
+    get:
+      tags: [discovery]
+      operationId: getServerInfo
+      summary: サーバーの情報（対応版・機能・上限・フィルターの項目・規約）
+      security: []
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: サーバーの情報
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServerInfo' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/auth/challenge:
+    post:
+      tags: [auth]
+      operationId: createChallenge
+      summary: チャレンジの発行（60 秒有効、1 回限り）
+      security: []
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChallengeRequest' }
+      responses:
+        '200':
+          description: 発行したチャレンジ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Challenge' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/auth/token:
+    post:
+      tags: [auth]
+      operationId: createToken
+      summary: 署名と引き換えにトークンを発行（1 時間有効）
+      description: |
+        署名する文字列は `"sanpo-auth-v1\n" + サーバーの origin + "\n" + nonce`。
+        未登録のアカウントは `sigKey` を添える（アカウントIDと公開鍵の一致だけ確認する）。
+      security: []
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenRequest' }
+      responses:
+        '200':
+          description: 発行したトークン
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Token' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/accounts/me:
+    put:
+      tags: [accounts]
+      operationId: putMyAccount
+      summary: 公開鍵の登録・更新
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountKeys' }
+      responses:
+        '200':
+          description: 登録後のアカウント
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [accounts]
+      operationId: deleteMyAccount
+      summary: アカウントと送ったメッセージを削除
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      responses:
+        '204': { description: 削除した }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/AccountIdPath'
+    get:
+      tags: [accounts]
+      operationId: getAccount
+      summary: 相手の公開鍵を取得
+      description: クライアントは `sigKey` からアカウントIDを計算して一致を確認し、`encKeys[].sig` を検証してから使う。
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: アカウント
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/messages:
+    post:
+      tags: [messages]
+      operationId: createMessage
+      summary: メッセージを置く
+      description: |
+        `direct`・`group` はこの時点で受け手ごとの配信記録を作り、プッシュの合図を送る。
+        同じ封筒の再送は `200` で同じ結果を返す。
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Envelope' }
+      responses:
+        '200':
+          description: 同じ封筒の再送（保存済み）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageStored' }
+        '201':
+          description: 保存した
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageStored' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        default: { $ref: '#/components/responses/Error' }
+    get:
+      tags: [messages]
+      operationId: listMyMessages
+      summary: 自分が置いたメッセージの一覧（新しい順）
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      parameters:
+        - name: state
+          in: query
+          description: 状態で絞る（カンマ区切り）。省略するとすべて（`deleted`・`removed` を除く）
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/MessageState' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/messages/{messageId}:
+    parameters:
+      - $ref: '#/components/parameters/MessageIdPath'
+    get:
+      tags: [messages]
+      operationId: getMessage
+      summary: 1 件取得（送り手・配信された受け手）
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: メッセージ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [messages]
+      operationId: replaceMessage
+      summary: 新しい版で置き換える
+      description: |
+        `rev` は今の版 + 1。`id`・`from`・`visibility`・`to` は変えられない。
+        `deleted`・`removed` のものは更新できない。
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Envelope' }
+      responses:
+        '200':
+          description: 置き換えた
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageStored' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [messages]
+      operationId: changeMessageState
+      summary: 停止・再開
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageStatePatch' }
+      responses:
+        '200':
+          description: 変更後の状態
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [messages]
+      operationId: deleteMessage
+      summary: 送り手が削除（届いた受け手にも取り消しを配信）
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      responses:
+        '204': { description: 削除した }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/messages/{messageId}/deliveries:
+    parameters:
+      - $ref: '#/components/parameters/MessageIdPath'
+    get:
+      tags: [messages]
+      operationId: getDeliveries
+      summary: 配信状況（送り手のみ）
+      description: |
+        `direct`・`group` は受け手ごと、`public` は集計のみ。
+        受信フィルター・ブロックで外れた受け手も `pending` として数える。
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 配信状況
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deliveries' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/inbox:
+    get:
+      tags: [delivery]
+      operationId: getInbox
+      summary: 自分への配信を差分で取得
+      description: |
+        `cells` を省略すると `direct`・`group` だけを返す（サーバーは位置を知らない）。
+        `cells` を指定すると、その地域の `public` も判定して返す（第 2 版、`features` に `public` があるときだけ）。
+        取得のたびに時間の条件と状態を判定し直す。
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: cells
+          in: query
+          description: '[第 2 版] geohash6。現在地のマスと周囲 8 マス（カンマ区切り、最大 9 個）'
+          style: form
+          explode: false
+          schema:
+            type: array
+            maxItems: 9
+            items: { $ref: '#/components/schemas/Geohash6' }
+      responses:
+        '200':
+          description: 配信の一覧（新しい版・取り消しを含む）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Inbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/inbox/{messageId}/ack:
+    parameters:
+      - $ref: '#/components/parameters/MessageIdPath'
+    post:
+      tags: [delivery]
+      operationId: ackDelivery
+      summary: 届いた・開けた・受信箱から外した、を記録
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Ack' }
+      responses:
+        '204': { description: 記録した }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/subscriptions/me:
+    get:
+      tags: [delivery]
+      operationId: getMySubscription
+      summary: 受信フィルター・公開プロフィールの取得
+      x-sanpo-feature: subscription
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: 受信の設定
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [delivery]
+      operationId: putMySubscription
+      summary: 受信フィルター・公開プロフィールの更新
+      x-sanpo-feature: subscription
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Subscription' }
+      responses:
+        '200':
+          description: 更新後の設定
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/devices/{deviceId}:
+    parameters:
+      - name: deviceId
+        in: path
+        required: true
+        description: 端末で作る ID（アプリを入れ直したら新しくなる）
+        schema: { $ref: '#/components/schemas/DeviceId' }
+    put:
+      tags: [delivery]
+      operationId: putDevice
+      summary: プッシュの方法と宛先の登録
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Device' }
+      responses:
+        '204': { description: 登録した }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [delivery]
+      operationId: deleteDevice
+      summary: プッシュの解除
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      responses:
+        '204': { description: 解除した }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/filters/validate:
+    post:
+      tags: [delivery]
+      operationId: validateFilter
+      summary: フィルター式の検証（保存・送信前の確認用）
+      x-sanpo-feature: subscription
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FilterValidateRequest' }
+      responses:
+        '200':
+          description: 問題なし
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/groups:
+    post:
+      tags: [groups]
+      operationId: createGroup
+      summary: グループの作成（名簿の rev は 1）
+      x-sanpo-feature: group
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignedRoster' }
+      responses:
+        '201':
+          description: 作成した
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignedRoster' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/groups/{groupId}:
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/GroupId' }
+    get:
+      tags: [groups]
+      operationId: getGroup
+      summary: 名簿と署名の取得（メンバーのみ）
+      x-sanpo-feature: group
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: 最新の名簿
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignedRoster' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [groups]
+      operationId: replaceGroup
+      summary: 名簿の更新（作成者のみ、rev を 1 増やす）
+      x-sanpo-feature: group
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignedRoster' }
+      responses:
+        '200':
+          description: 更新した
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignedRoster' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [groups]
+      operationId: deleteGroup
+      summary: グループの削除（作成者のみ）
+      x-sanpo-feature: group
+      x-sanpo-release: 1
+      responses:
+        '204': { description: 削除した }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/blobs/{blobId}:
+    parameters:
+      - name: blobId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/BlobId' }
+    put:
+      tags: [blobs]
+      operationId: putBlob
+      summary: 暗号化した添付ファイルを置く（封筒より先に置く）
+      description: どの封筒からも参照されないまま 24 時間たった添付ファイルは、サーバーが削除する。
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              contentEncoding: binary
+      responses:
+        '201': { description: 保存した }
+        '200': { description: 同じ内容の再送（保存済み） }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        default: { $ref: '#/components/responses/Error' }
+    get:
+      tags: [blobs]
+      operationId: getBlob
+      summary: 添付ファイルを取得（送り手と、配信された受け手のみ）
+      x-sanpo-feature: direct
+      x-sanpo-release: 1
+      responses:
+        '200':
+          description: 暗号化されたバイト列
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                contentEncoding: binary
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/reports:
+    post:
+      tags: [reports]
+      operationId: createReport
+      summary: 不適切なメッセージを通報する
+      x-sanpo-feature: core
+      x-sanpo-release: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportRequest' }
+      responses:
+        '201':
+          description: 受け付けた
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { $ref: '#/components/schemas/ReportId' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/admin/reports:
+    get:
+      tags: [admin]
+      operationId: adminListReports
+      summary: 通報の一覧
+      x-sanpo-feature: admin
+      x-sanpo-release: 2
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+            default: open
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 通報の一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminReportList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/admin/messages/{messageId}/remove:
+    parameters:
+      - $ref: '#/components/parameters/MessageIdPath'
+    post:
+      tags: [admin]
+      operationId: adminRemoveMessage
+      summary: メッセージの削除（removed にし、受け手に取り消しを配信）
+      x-sanpo-feature: admin
+      x-sanpo-release: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 1000 }
+      responses:
+        '204': { description: 削除した }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /v1/admin/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/AccountIdPath'
+    put:
+      tags: [admin]
+      operationId: adminUpdateAccount
+      summary: 役割の変更・停止・停止の解除
+      x-sanpo-feature: admin
+      x-sanpo-release: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { $ref: '#/components/schemas/Role' }
+                suspended: { type: boolean }
+      responses:
+        '200':
+          description: 更新後のアカウント
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: '`/v1/auth/token` で受け取ったトークン（1 時間有効）'
+
+  parameters:
+    AccountIdPath:
+      name: accountId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/AccountId' }
+    MessageIdPath:
+      name: messageId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/MessageId' }
+    Cursor:
+      name: cursor
+      in: query
+      description: 前の応答の `cursor`。省略すると最初から
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+
+  headers:
+    RetryAfter:
+      description: 再試行までの秒数
+      schema: { type: integer, minimum: 0 }
+
+  responses:
+    BadRequest:
+      description: |
+        `invalid_request` / `invalid_signature` / `unsupported_suite` / `invalid_filter` /
+        `unsupported_feature` / `immutable_field`
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: '`token_expired` / `challenge_expired`'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: |
+        `account_mismatch` / `forbidden_role` / `public_disabled` / `not_group_member` / `account_suspended`
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: '`not_found`（削除・期限切れ、見る権限がない場合を含む）'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: '`id_conflict` / `rev_conflict` / `invalid_state`'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooLarge:
+      description: '`too_large`'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: '`blob_missing` / `recipients_mismatch`'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: '`rate_limited`'
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Error:
+      description: '`server_error` など（5xx）'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    # ---- 基本の型 ----
+    Base64Url:
+      type: string
+      pattern: '^[A-Za-z0-9_-]*$'
+      description: base64url（パディングなし）
+    DateTime:
+      type: string
+      format: date-time
+    AccountId:
+      type: string
+      pattern: '^sg1[a-z2-7]{32}$'
+      description: '`sg1` + base32(SHA-256(署名鍵の公開鍵)) の先頭 32 文字'
+    MessageId:
+      type: string
+      pattern: '^msg_[0-9A-HJKMNP-TV-Z]{26}$'
+    BlobId:
+      type: string
+      pattern: '^blb_[0-9A-HJKMNP-TV-Z]{26}$'
+    GroupId:
+      type: string
+      pattern: '^grp_[0-9A-HJKMNP-TV-Z]{26}$'
+    ReportId:
+      type: string
+      pattern: '^rpt_[0-9A-HJKMNP-TV-Z]{26}$'
+    DeviceId:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{16,64}$'
+    Geohash:
+      type: string
+      pattern: '^[0-9b-hjkmnp-z]{4,6}$'
+    Geohash6:
+      type: string
+      pattern: '^[0-9b-hjkmnp-z]{6}$'
+    Tag:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9_-]{0,31}$'
+    LanguageTag:
+      type: string
+      pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$'
+      description: BCP 47
+    Feature:
+      type: string
+      description: 知らない値は無視する
+      examples: [direct, group, subscription, public, audience, publisher, admin]
+    Role:
+      type: string
+      enum: [member, publisher, admin]
+    Visibility:
+      type: string
+      enum: [direct, group, public]
+    Category:
+      type: string
+      enum: [personal, event, notice, promo]
+    MessageState:
+      type: string
+      enum: [scheduled, active, paused, ended, deleted, removed]
+    DeliveryState:
+      type: string
+      enum: [pending, delivered, opened, dismissed, revoked]
+
+    # ---- エラー ----
+    Problem:
+      type: object
+      description: RFC 9457
+      required: [status, code]
+      properties:
+        type: { type: string, default: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_signature
+            - unsupported_suite
+            - invalid_filter
+            - unsupported_feature
+            - immutable_field
+            - token_expired
+            - challenge_expired
+            - account_mismatch
+            - forbidden_role
+            - public_disabled
+            - not_group_member
+            - account_suspended
+            - not_found
+            - id_conflict
+            - rev_conflict
+            - invalid_state
+            - too_large
+            - blob_missing
+            - recipients_mismatch
+            - rate_limited
+            - server_error
+        path:
+          type: string
+          description: '`invalid_filter` のとき、式の中の誤りの場所（JSON Pointer）'
+
+    # ---- 検出 ----
+    ServerInfo:
+      type: object
+      required: [versions, suites, features, limits, filterFields, push]
+      properties:
+        name: { type: string, maxLength: 100 }
+        versions:
+          type: array
+          items: { type: string, examples: [v1] }
+          contains: { const: v1 }
+        suites:
+          type: array
+          items: { type: string }
+          contains: { const: sanpo-v1 }
+        features:
+          type: array
+          items: { $ref: '#/components/schemas/Feature' }
+          allOf:
+            - contains: { const: direct }
+            - contains: { const: group }
+            - contains: { const: subscription }
+        limits: { $ref: '#/components/schemas/Limits' }
+        filterFields:
+          type: object
+          required: [audience, subscription]
+          properties:
+            audience:
+              type: array
+              description: 第 1 版のサーバーは空
+              items: { type: string }
+            subscription:
+              type: array
+              items: { type: string }
+        push:
+          type: array
+          items:
+            type: string
+            enum: [poll, unifiedpush]
+          contains: { const: poll }
+        termsUrl: { type: string, format: uri }
+        contact: { type: string }
+      examples:
+        - name: 家族用のサーバー
+          versions: [v1]
+          suites: [sanpo-v1]
+          features: [direct, group, subscription]
+          limits:
+            maxEnvelopeBytes: 65536
+            maxBlobBytes: 5242880
+            maxRecipients: 20
+            maxGroupMembers: 50
+            maxExpiresDays: 3650
+            publicMessages: false
+          filterFields:
+            audience: []
+            subscription: [message.from, message.visibility, message.group, message.category, message.tags, message.lang, context.time]
+          push: [poll, unifiedpush]
+    Limits:
+      type: object
+      required: [maxEnvelopeBytes, maxBlobBytes, maxRecipients, maxGroupMembers, maxExpiresDays, publicMessages]
+      properties:
+        maxEnvelopeBytes: { type: integer, minimum: 1 }
+        maxBlobBytes: { type: integer, minimum: 0 }
+        maxRecipients: { type: integer, minimum: 1 }
+        maxGroupMembers: { type: integer, minimum: 2 }
+        maxExpiresDays: { type: integer, minimum: 1 }
+        publicMessages: { type: boolean }
+        maxAudience:
+          description: '[第 2 版] 役割ごとの `delivery.maxRecipients` の上限'
+          type: object
+          additionalProperties: { type: integer, minimum: 1 }
+
+    # ---- 認証 ----
+    ChallengeRequest:
+      type: object
+      required: [account]
+      properties:
+        account: { $ref: '#/components/schemas/AccountId' }
+    Challenge:
+      type: object
+      required: [nonce, expiresAt]
+      properties:
+        nonce: { $ref: '#/components/schemas/Base64Url' }
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+    TokenRequest:
+      type: object
+      required: [account, nonce, sig]
+      properties:
+        account: { $ref: '#/components/schemas/AccountId' }
+        nonce: { $ref: '#/components/schemas/Base64Url' }
+        sig:
+          $ref: '#/components/schemas/Base64Url'
+          description: 'Ed25519 で `"sanpo-auth-v1\n" + origin + "\n" + nonce` に署名したもの'
+        sigKey:
+          $ref: '#/components/schemas/Base64Url'
+          description: 未登録のアカウントのみ。Ed25519 の公開鍵
+    Token:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token: { type: string }
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+
+    # ---- アカウント ----
+    EncKey:
+      type: object
+      required: [kid, key, createdAt, sig]
+      properties:
+        kid: { type: string, pattern: '^[A-Za-z0-9_-]{1,32}$' }
+        key:
+          $ref: '#/components/schemas/Base64Url'
+          description: X25519 の公開鍵
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        sig:
+          $ref: '#/components/schemas/Base64Url'
+          description: '署名鍵で `"sanpo-enckey-v1\n" + kid + "\n" + key` に署名したもの'
+    AccountKeys:
+      type: object
+      required: [sigKey, encKeys]
+      properties:
+        sigKey:
+          $ref: '#/components/schemas/Base64Url'
+          description: Ed25519 の公開鍵。アカウントIDと一致すること
+        encKeys:
+          type: array
+          description: 新しい鍵が先頭
+          minItems: 1
+          maxItems: 5
+          items: { $ref: '#/components/schemas/EncKey' }
+    Account:
+      allOf:
+        - $ref: '#/components/schemas/AccountKeys'
+        - type: object
+          required: [id, role]
+          properties:
+            id: { $ref: '#/components/schemas/AccountId' }
+            role: { $ref: '#/components/schemas/Role' }
+            suspended:
+              type: boolean
+              description: 本人と admin にだけ返す
+
+    # ---- 封筒 ----
+    Envelope:
+      type: object
+      description: |
+        送り手が署名した封筒。サーバーは受け取ったまま保存して返す（並べ替え・整形をしない）。
+        `sig` は `protected + "." + ciphertext` への Ed25519 署名。
+        `protected` を base64url で復号した JSON が `EnvelopeHeader`。
+      required: [protected, ciphertext, sig]
+      properties:
+        protected:
+          $ref: '#/components/schemas/Base64Url'
+          contentMediaType: application/json
+          contentSchema: { $ref: '#/components/schemas/EnvelopeHeader' }
+        ciphertext:
+          $ref: '#/components/schemas/Base64Url'
+          description: '12 バイトの nonce + AES-256-GCM の暗号文（`enc: none` では本文の JSON）'
+        sig: { $ref: '#/components/schemas/Base64Url' }
+    EnvelopeHeader:
+      type: object
+      description: 封筒の `protected` の中身（サーバーが読める情報）
+      required: [v, suite, id, rev, from, visibility, to, expiresAt, createdAt]
+      properties:
+        v: { const: 1 }
+        suite: { type: string, examples: [sanpo-v1] }
+        id: { $ref: '#/components/schemas/MessageId' }
+        rev: { type: integer, minimum: 1 }
+        from: { $ref: '#/components/schemas/AccountId' }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+        to:
+          type: array
+          description: 'direct: 受け手のアカウントID。group: グループID 1 つ。public: 空'
+          items:
+            anyOf:
+              - $ref: '#/components/schemas/AccountId'
+              - $ref: '#/components/schemas/GroupId'
+        keys:
+          type: array
+          description: direct・group のみ。受け手ごとに HPKE で包んだ DEK（送り手自身を含む）
+          items: { $ref: '#/components/schemas/WrappedKey' }
+        groupRev:
+          type: integer
+          minimum: 1
+          description: group のみ。鍵を包んだときの名簿の版
+        enc:
+          type: string
+          enum: [place, none]
+          description: '[第 2 版] public のみ'
+        cells:
+          type: array
+          description: '[第 2 版] public のみ。置いた場所の geohash6'
+          minItems: 1
+          maxItems: 9
+          items: { $ref: '#/components/schemas/Geohash6' }
+        category:
+          $ref: '#/components/schemas/Category'
+          default: personal
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/Tag' }
+        lang: { $ref: '#/components/schemas/LanguageTag' }
+        audience:
+          $ref: '#/components/schemas/FilterExpr'
+          description: '[第 2 版] 配信条件。項目は filterFields.audience'
+        delivery:
+          description: '[第 2 版] 配信の上限'
+          type: object
+          properties:
+            maxRecipients: { type: integer, minimum: 1 }
+            oncePerAccount: { type: boolean, default: true }
+        notBefore: { $ref: '#/components/schemas/DateTime' }
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+        blobs:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/BlobId' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+      allOf:
+        - if:
+            properties: { visibility: { const: direct } }
+          then:
+            required: [keys]
+            properties:
+              to:
+                minItems: 1
+                items: { $ref: '#/components/schemas/AccountId' }
+        - if:
+            properties: { visibility: { const: group } }
+          then:
+            required: [keys, groupRev]
+            properties:
+              to:
+                minItems: 1
+                maxItems: 1
+                items: { $ref: '#/components/schemas/GroupId' }
+        - if:
+            properties: { visibility: { const: public } }
+          then:
+            required: [enc, cells]
+            properties:
+              to: { maxItems: 0 }
+    WrappedKey:
+      type: object
+      required: [to, kid, enc]
+      properties:
+        to: { $ref: '#/components/schemas/AccountId' }
+        kid: { type: string }
+        enc:
+          $ref: '#/components/schemas/Base64Url'
+          description: 'HPKE（DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-256-GCM）の出力。info = "sanpo-v1 dek"、aad = メッセージID'
+
+    # ---- メッセージの管理 ----
+    MessageStored:
+      type: object
+      required: [id, rev, state, storedAt]
+      properties:
+        id: { $ref: '#/components/schemas/MessageId' }
+        rev: { type: integer, minimum: 1 }
+        state: { $ref: '#/components/schemas/MessageState' }
+        storedAt: { $ref: '#/components/schemas/DateTime' }
+    DeliveryCounts:
+      type: object
+      properties:
+        pending: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0 }
+        opened: { type: integer, minimum: 0 }
+        dismissed: { type: integer, minimum: 0 }
+    MessageSummary:
+      type: object
+      required: [id, rev, state, visibility, expiresAt, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/MessageId' }
+        rev: { type: integer, minimum: 1 }
+        state: { $ref: '#/components/schemas/MessageState' }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+        category: { $ref: '#/components/schemas/Category' }
+        notBefore:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        counts: { $ref: '#/components/schemas/DeliveryCounts' }
+    MessageList:
+      type: object
+      required: [messages, hasMore]
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/MessageSummary' }
+        cursor: { type: string }
+        hasMore: { type: boolean }
+    MessageDetail:
+      type: object
+      required: [envelope, state]
+      properties:
+        envelope: { $ref: '#/components/schemas/Envelope' }
+        state: { $ref: '#/components/schemas/MessageState' }
+        deliveryState:
+          $ref: '#/components/schemas/DeliveryState'
+          description: 受け手が取得したときの自分への配信の状態
+    MessageStatePatch:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [active, paused]
+    Deliveries:
+      type: object
+      required: [counts]
+      properties:
+        counts: { $ref: '#/components/schemas/DeliveryCounts' }
+        recipients:
+          type: array
+          description: direct・group のみ（public では返さない）
+          items:
+            type: object
+            required: [account, state]
+            properties:
+              account: { $ref: '#/components/schemas/AccountId' }
+              state: { $ref: '#/components/schemas/DeliveryState' }
+              deliveredAt: { $ref: '#/components/schemas/DateTime' }
+              openedAt: { $ref: '#/components/schemas/DateTime' }
+        cursor: { type: string }
+        hasMore: { type: boolean }
+
+    # ---- 配信 ----
+    InboxItem:
+      oneOf:
+        - $ref: '#/components/schemas/InboxMessage'
+        - $ref: '#/components/schemas/InboxRevoked'
+      discriminator:
+        propertyName: type
+        mapping:
+          message: '#/components/schemas/InboxMessage'
+          revoked: '#/components/schemas/InboxRevoked'
+    InboxMessage:
+      type: object
+      description: 新しいメッセージか新しい版。端末は同じ id の古い版を置き換える
+      required: [type, envelope, state]
+      properties:
+        type: { const: message }
+        envelope: { $ref: '#/components/schemas/Envelope' }
+        state: { $ref: '#/components/schemas/DeliveryState' }
+    InboxRevoked:
+      type: object
+      description: 取り消し。端末からも消す
+      required: [type, id, reason]
+      properties:
+        type: { const: revoked }
+        id: { $ref: '#/components/schemas/MessageId' }
+        reason:
+          type: string
+          enum: [deleted, removed, left_group]
+    Inbox:
+      type: object
+      required: [items, cursor, hasMore]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InboxItem' }
+        cursor: { type: string }
+        hasMore: { type: boolean }
+    Ack:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [delivered, opened, dismissed]
+    TimeOfDay:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    Subscription:
+      type: object
+      properties:
+        filter:
+          $ref: '#/components/schemas/FilterExpr'
+          description: |
+            受信フィルター。項目は filterFields.subscription。
+            省略時の既定: direct・group はすべて、public は personal・event・notice（promo は受け取らない）
+        profile:
+          description: '[第 2 版] 配信条件に使う公開プロフィール。省略した項目は非公開'
+          type: object
+          properties:
+            lang: { $ref: '#/components/schemas/LanguageTag' }
+            interests:
+              type: array
+              maxItems: 20
+              uniqueItems: true
+              items: { $ref: '#/components/schemas/Tag' }
+        blocked:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/AccountId' }
+        quietHours:
+          type: object
+          description: プッシュの合図を送らない時間帯（配信そのものは止めない）
+          required: [from, to, tz]
+          properties:
+            from: { $ref: '#/components/schemas/TimeOfDay' }
+            to: { $ref: '#/components/schemas/TimeOfDay' }
+            tz: { type: string, examples: [Asia/Tokyo] }
+        maxPublicPerDay:
+          type: integer
+          minimum: 0
+          description: '[第 2 版] 1 日に受け取る public の上限'
+        shareOpened:
+          type: boolean
+          default: true
+          description: 開けたことを送り手に知らせるか
+    Device:
+      oneOf:
+        - type: object
+          required: [method]
+          properties:
+            method: { const: poll }
+        - type: object
+          required: [method, endpoint]
+          properties:
+            method: { const: unifiedpush }
+            endpoint:
+              type: string
+              format: uri
+              description: UnifiedPush の配信アプリが発行した URL。合図 `{"type":"inbox","server":"<origin>"}` だけを送る
+    FilterValidateRequest:
+      type: object
+      required: [kind, filter]
+      properties:
+        kind:
+          type: string
+          enum: [audience, subscription]
+        filter: { $ref: '#/components/schemas/FilterExpr' }
+
+    # ---- フィルター式 ----
+    FilterExpr:
+      description: |
+        入れ子は 4 段まで、条件は合計 32 個まで（スキーマでは表せないためサーバーが確認する）。
+        知らない項目・演算子は `invalid_filter`。
+      oneOf:
+        - $ref: '#/components/schemas/FilterAll'
+        - $ref: '#/components/schemas/FilterAny'
+        - $ref: '#/components/schemas/FilterNot'
+        - $ref: '#/components/schemas/FilterCondition'
+    FilterAll:
+      type: object
+      required: [all]
+      additionalProperties: false
+      properties:
+        all:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/FilterExpr' }
+    FilterAny:
+      type: object
+      required: [any]
+      additionalProperties: false
+      properties:
+        any:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/FilterExpr' }
+    FilterNot:
+      type: object
+      required: [not]
+      additionalProperties: false
+      properties:
+        not: { $ref: '#/components/schemas/FilterExpr' }
+    FilterCondition:
+      type: object
+      required: [field, op, value]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          description: |
+            配信条件: recipient.account / recipient.group / recipient.lang / recipient.interests / context.cells / context.time。
+            受信フィルター: message.from / message.visibility / message.group / message.category / message.tags / message.lang / context.time。
+            実際に使える項目は検出 API の filterFields
+          pattern: '^(recipient|message|context)\.[a-z][A-Za-z]*$'
+        op:
+          type: string
+          enum: [eq, in, hasAny, hasAll, within, between]
+        value: {}
+      allOf:
+        - if:
+            properties: { op: { const: eq } }
+          then:
+            properties:
+              value: { type: [string, number, boolean] }
+        - if:
+            properties: { op: { enum: [in, hasAny, hasAll] } }
+          then:
+            properties:
+              value:
+                type: array
+                minItems: 1
+                maxItems: 100
+                items: { type: [string, number] }
+        - if:
+            properties: { op: { const: within } }
+          then:
+            properties:
+              value:
+                type: object
+                required: [cells]
+                additionalProperties: false
+                properties:
+                  cells:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    items: { $ref: '#/components/schemas/Geohash' }
+        - if:
+            properties: { op: { const: between } }
+          then:
+            properties:
+              value:
+                type: object
+                required: [from, to, tz]
+                additionalProperties: false
+                properties:
+                  days:
+                    type: array
+                    uniqueItems: true
+                    items:
+                      type: string
+                      enum: [mon, tue, wed, thu, fri, sat, sun]
+                  from: { $ref: '#/components/schemas/TimeOfDay' }
+                  to: { $ref: '#/components/schemas/TimeOfDay' }
+                  tz: { type: string }
+
+    # ---- グループ ----
+    SignedRoster:
+      type: object
+      description: '`roster` を base64url で復号した JSON が `Roster`。`sig` は作成者の Ed25519 による `roster` 文字列への署名'
+      required: [roster, sig]
+      properties:
+        roster:
+          $ref: '#/components/schemas/Base64Url'
+          contentMediaType: application/json
+          contentSchema: { $ref: '#/components/schemas/Roster' }
+        sig: { $ref: '#/components/schemas/Base64Url' }
+    Roster:
+      type: object
+      required: [id, owner, rev, members, updatedAt]
+      properties:
+        id: { $ref: '#/components/schemas/GroupId' }
+        owner: { $ref: '#/components/schemas/AccountId' }
+        rev: { type: integer, minimum: 1 }
+        members:
+          type: array
+          description: 作成者を含む
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/AccountId' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+
+    # ---- 通報 ----
+    ReportRequest:
+      type: object
+      required: [message, reason]
+      properties:
+        message: { $ref: '#/components/schemas/MessageId' }
+        reason:
+          type: string
+          enum: [spam, harassment, dangerous_place, misleading_ad, other]
+        dek:
+          $ref: '#/components/schemas/Base64Url'
+          description: '管理者が内容を確認するための DEK（enc: none 以外）'
+        note: { type: string, maxLength: 1000 }
+    AdminReportList:
+      type: object
+      required: [reports, hasMore]
+      properties:
+        reports:
+          type: array
+          items:
+            type: object
+            required: [id, message, reason, reportedAt]
+            properties:
+              id: { $ref: '#/components/schemas/ReportId' }
+              message: { $ref: '#/components/schemas/MessageId' }
+              envelope: { $ref: '#/components/schemas/Envelope' }
+              reason: { type: string }
+              dek: { $ref: '#/components/schemas/Base64Url' }
+              note: { type: string }
+              reporter: { $ref: '#/components/schemas/AccountId' }
+              reportedAt: { $ref: '#/components/schemas/DateTime' }
+        cursor: { type: string }
+        hasMore: { type: boolean }
