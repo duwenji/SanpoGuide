@@ -1,5 +1,6 @@
 package com.example.sanpoguide.ui
 
+import com.example.sanpoguide.data.Poi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -178,7 +179,7 @@ private fun SpotRow(item: SpotItem, onClick: () -> Unit) {
                     )
                     Spacer(Modifier.width(10.dp))
                 }
-                item.distanceM?.let { Text(formatDistance(it), style = MaterialTheme.typography.labelLarge) }
+                item.distanceM?.let { Text(formatDistance(item.poi, it), style = MaterialTheme.typography.labelLarge) }
             }
         },
     )
@@ -193,7 +194,7 @@ private fun GuideSheet(spot: SelectedSpot, onSpeak: (String) -> Unit, onStop: ()
     ) {
         Text(poi.name, style = MaterialTheme.typography.headlineSmall)
         Text(
-            listOfNotNull(poi.category, spot.item.distanceM?.let(::formatDistance)).joinToString(" ・ "),
+            listOfNotNull(poi.category, spot.item.distanceM?.let { formatDistance(poi, it) }).joinToString(" ・ "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -242,5 +243,5 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
     }
 }
 
-private fun formatDistance(m: Int): String =
-    if (m < 1000) "${m}m" else "%.1fkm".format(m / 1000f)
+private fun formatDistance(poi: Poi, m: Int): String =
+    if (poi.isInside(m)) "敷地内" else if (m < 1000) "${m}m" else "%.1fkm".format(m / 1000f)

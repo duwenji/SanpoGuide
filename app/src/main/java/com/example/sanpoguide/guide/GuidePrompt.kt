@@ -15,6 +15,7 @@ object GuidePrompt {
         "name" to poi.name,
         "category" to poi.category,
         "distance_m" to distanceM,
+        "inside" to (distanceM != null && poi.isInside(distanceM)),
         "tags" to poi.tags.filterKeys { it in USEFUL_TAGS || it.startsWith("name") }
             .map { (k, v) -> "$k=$v" },
     )

@@ -38,6 +38,8 @@ data class SpotVisit(
         if (poiId == poi.id) return true
         if (name != poi.name) return false
         if (lat == null || lon == null) return true
+        // A large park's center can be far from the point an earlier visit recorded for it.
+        poi.shape?.let { return it.distanceM(lat, lon) <= SAME_PLACE_RADIUS_M }
         val d = FloatArray(1)
         Location.distanceBetween(lat, lon, poi.lat, poi.lon, d)
         return d[0] <= SAME_PLACE_RADIUS_M

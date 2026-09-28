@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -27,7 +28,7 @@ class OverpassClient(
                   nwr($around)["name"]["leisure"~"^(park|garden)$"];
                   nwr($around)["name"]["natural"~"^(tree|peak|spring|water)$"];
                 );
-                out center tags 80;
+                out tags geom 80;
             """.trimIndent()
 
             // Public Overpass servers are often busy (429/504); fall through to the next mirror.
@@ -61,15 +62,51 @@ class OverpassClient(
             val (lat, lon) = if (e.has("lat")) {
                 e.getDouble("lat") to e.getDouble("lon")
             } else {
-                val c = e.optJSONObject("center") ?: continue
-                c.getDouble("lat") to c.getDouble("lon")
+                val b = e.optJSONObject("bounds") ?: continue
+                (b.getDouble("minlat") + b.getDouble("maxlat")) / 2 to (b.getDouble("minlon") + b.getDouble("maxlon")) / 2
             }
             val id = "${e.getString("type")}/${e.getLong("id")}"
-            // The same place is often mapped both as a node and an area; keep the first.
+            val poi = Poi(id, name, lat, lon, categoryOf(tags), tags, shapeOf(e, tags))
+            // The same place is often mapped both as a node and an area. Keep the area, whose
+            // edge tells when the user arrives, but also the node's tags (often the wikipedia link).
             val key = "$name@${"%.3f".format(lat)},${"%.3f".format(lon)}"
-            result.putIfAbsent(key, Poi(id, name, lat, lon, categoryOf(tags), tags))
+            val seen = result[key]
+            result[key] = when {
+                seen == null -> poi
+                seen.shape == null && poi.shape != null -> poi.copy(tags = seen.tags + poi.tags)
+                else -> seen
+            }
         }
         return result.values.toList()
+    }
+
+    /** The outline of a way or relation, from the geometry `out geom` adds; null for nodes. */
+    private fun shapeOf(e: JSONObject, tags: Map<String, String>): Shape? {
+        val type = e.getString("type")
+        val lines = when (type) {
+            "way" -> listOfNotNull(e.optJSONArray("geometry")?.let(::coords))
+            "relation" -> {
+                val members = e.optJSONArray("members") ?: JSONArray()
+                (0 until members.length()).map(members::getJSONObject)
+                    .filter { it.optString("type") == "way" }
+                    .mapNotNull { it.optJSONArray("geometry")?.let(::coords) }
+            }
+            else -> emptyList()
+        }.filter { it.size >= 4 }
+        if (lines.isEmpty()) return null
+        val isArea = tags["area"] != "no" && when (type) {
+            // A closed way is an area (a park); an open one is a line (a wall, an old road).
+            "way" -> lines[0].let { it[0] == it[it.size - 2] && it[1] == it[it.size - 1] }
+            else -> tags["type"] == "multipolygon" || tags["type"] == "boundary"
+        }
+        return Shape(lines, isArea)
+    }
+
+    private fun coords(geometry: JSONArray): DoubleArray {
+        val points = (0 until geometry.length()).mapNotNull(geometry::optJSONObject)
+        return DoubleArray(points.size * 2) { i ->
+            points[i / 2].getDouble(if (i % 2 == 0) "lat" else "lon")
+        }
     }
 
     private fun categoryOf(tags: Map<String, String>): String = when {
