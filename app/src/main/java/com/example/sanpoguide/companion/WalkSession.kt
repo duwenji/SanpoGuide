@@ -28,6 +28,16 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
     var restRemarked = false
         private set
 
+    /** Whether the companion has mentioned the coming sunset; once per walk. */
+    var sunsetWarned = false
+
+    /** When each kind of weather change was last warned about. */
+    val weatherWarnedAt = mutableMapOf<WeatherChangeKind, Long>()
+
+    /** Facilities mentioned on this walk (each once), and when each need last came up. */
+    val mentionedFacilities = mutableSetOf<String>()
+    val facilityMentionAt = mutableMapOf<FacilityNeed, Long>()
+
     /** Recent lines, so the model can avoid repeating itself. */
     val recentLines = ArrayDeque<String>()
 

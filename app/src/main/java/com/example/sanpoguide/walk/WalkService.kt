@@ -16,13 +16,18 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.example.sanpoguide.R
 import com.example.sanpoguide.SanpoApp
+import com.example.sanpoguide.companion.FacilityAdvice
+import com.example.sanpoguide.companion.FacilityAdvisor
 import com.example.sanpoguide.companion.TalkEvent
+import com.example.sanpoguide.companion.WeatherChangeDetector
+import com.example.sanpoguide.companion.WeatherChangeKind
 import com.example.sanpoguide.companion.Utterance
 import com.example.sanpoguide.companion.WalkSession
 import com.example.sanpoguide.companion.Weather
 import com.example.sanpoguide.data.Poi
 import com.example.sanpoguide.history.SpotVisit
 import com.example.sanpoguide.prompt.Prompts
+import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.ui.MainActivity
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -134,7 +139,20 @@ class WalkService : LifecycleService() {
         // Let the current line finish before starting another.
         if (app.speaker.isSpeaking) return
         val level = app.settings.settings.value.talkLevel
+        val limits = app.settings.settings.value.thresholds
         val now = System.currentTimeMillis()
+
+        // A turn in the weather comes first, regardless of the talk level: it's about safety.
+        val change = weather?.let { WeatherChangeDetector.detect(it, now, limits) }
+        val warnedAt = change?.let { s.weatherWarnedAt[it.kind] }
+        if (change != null && (warnedAt == null || now - warnedAt >= limits.ms(Threshold.WEATHER_REPEAT_MIN))) {
+            talk {
+                // A thunderstorm warning also covers the rain that comes with it.
+                WeatherChangeKind.entries.filter { it >= change.kind }.forEach { s.weatherWarnedAt[it] = now }
+                speakLine(app.companion.say(TalkEvent.WeatherTurn(change), s, weather))
+            }
+            return
+        }
 
         // While the user stands still, don't run through every spot within reach one by one;
         // the spot they arrived at has been introduced, and a rest remark may be due instead.
@@ -155,7 +173,36 @@ class WalkService : LifecycleService() {
             }
         }
 
+        // Heads-up before dark, regardless of the talk level: it's about getting home, not chat.
+        val sunsetAt = weather?.sunsetAt
+        if (sunsetAt != null && !s.sunsetWarned) {
+            val minutesLeft = ((sunsetAt - now) / 60_000).toInt()
+            // Too close to be useful below the latest minute; an empty range if the settings cross.
+            if (minutesLeft in limits[Threshold.SUNSET_LATEST_MIN]..limits[Threshold.SUNSET_NOTICE_MIN]) {
+                talk {
+                    s.sunsetWarned = true
+                    speakLine(app.companion.say(TalkEvent.Sunset(minutesLeft), s, weather))
+                }
+                return
+            }
+        }
+
         if (now - s.lastSpokeAt < level.minGapMs) return
+
+        val facility = FacilityAdvisor.pick(
+            app.spots.facilities.value.map { it to it.distanceFrom(location) },
+            s.elapsedMs(now), weather, s.mentionedFacilities, s.facilityMentionAt, now, limits,
+        )
+        if (facility != null) {
+            talk {
+                s.mentionedFacilities += facility.facility.id
+                s.facilityMentionAt[facility.need] = now
+                val direction = directionTo(location, facility)
+                speakLine(app.companion.say(TalkEvent.NearFacility(facility, direction), s, weather))
+            }
+            return
+        }
+
         val restMinutes = s.restMinutes(now)
         if (level.remarkOnRest && restMinutes >= REST_MINUTES && !s.restRemarked) {
             talk {
@@ -196,6 +243,13 @@ class WalkService : LifecycleService() {
         getSystemService(NotificationManager::class.java)
             .notify(SPOT_NOTIFICATION_ID, spotNotification(poi, text))
         speakLine(text, poi.name)
+    }
+
+    /** "前方" etc. while the user is walking; null when standing (no reliable heading) or already there. */
+    private fun directionTo(location: Location, advice: FacilityAdvice): String? {
+        if (!location.hasBearing() || location.speed < MIN_HEADING_SPEED || advice.distanceM < 15) return null
+        val target = Location("").apply { latitude = advice.facility.lat; longitude = advice.facility.lon }
+        return FacilityAdvisor.relativeDirection(location.bearing, location.bearingTo(target))
     }
 
     private fun speakLine(text: String, spotName: String? = null) {
@@ -287,9 +341,12 @@ class WalkService : LifecycleService() {
         private const val SPOT_NOTIFICATION_ID = 2
         private const val ACTION_STOP = "stop"
         private const val TICK_MS = 30_000L
-        private const val WEATHER_REFRESH_MS = 30 * 60_000L
+        // Often enough that the lookahead for weather changes stays current.
+        private const val WEATHER_REFRESH_MS = 15 * 60_000L
         private const val REST_MINUTES = 4
         private const val STATIONARY_MINUTES = 2
+        // Below walking pace (m/s) the reported heading is noise.
+        private const val MIN_HEADING_SPEED = 0.5f
         private const val MIN_SAVED_WALK_MS = 60_000L
         const val ANNOUNCE_RADIUS_M = 60f
 

@@ -21,7 +21,7 @@ object Prompts {
     }
 
     /** One file per walk event, in `companion/events/` and `fallback/companion/`. */
-    enum class Event(val file: String) { START("start"), REVISIT("revisit"), MILESTONE("milestone"), REST("rest"), FINISH("finish") }
+    enum class Event(val file: String) { START("start"), REVISIT("revisit"), MILESTONE("milestone"), REST("rest"), SUNSET("sunset"), WEATHER_CHANGE("weather_change"), FACILITY("facility"), FINISH("finish") }
 
     fun event(e: Event) = "companion/events/${e.file}"
 

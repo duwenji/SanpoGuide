@@ -10,15 +10,23 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/** Searches OpenStreetMap (Overpass API) for walk-worthy spots around a point. */
+/** What one search found: spots to guide, and amenities for the map. */
+data class NearbyResult(val spots: List<Poi>, val facilities: List<Facility>)
+
+/** Searches OpenStreetMap (Overpass API) for walk-worthy spots and walk amenities around a point. */
 class OverpassClient(
     private val http: OkHttpClient = OkHttpClient.Builder()
         .callTimeout(40, TimeUnit.SECONDS)
         .build(),
 ) {
-    suspend fun search(lat: Double, lon: Double, radiusM: Int = 600): List<Poi> =
+    suspend fun search(lat: Double, lon: Double, radiusM: Int = 600): NearbyResult =
         withContext(Dispatchers.IO) {
             val around = "around:$radiusM,$lat,$lon"
+            // Benches and vending machines are everywhere; only the close ones matter.
+            val closeAround = "around:${minOf(radiusM, CLOSE_RADIUS_M)},$lat,$lon"
+            val open = """["access"!~"^(private|no)$"]"""
+            // Machines that sell nothing a walker needs (tickets, parking, cigarettes, ...).
+            val usefulVending = """["vending"!~"ticket|parking|cigarette|excrement|condom|newspaper|fuel|photo"]"""
             val query = """
                 [out:json][timeout:25];
                 (
@@ -29,6 +37,16 @@ class OverpassClient(
                   nwr($around)["name"]["natural"~"^(tree|peak|spring|water)$"];
                 );
                 out tags geom 80;
+                nwr($around)["amenity"="toilets"]$open;
+                out center 40;
+                nwr($around)["amenity"="drinking_water"]$open;
+                out center 40;
+                nwr($around)["amenity"="shelter"]$open;
+                out center 40;
+                nwr($closeAround)["amenity"="bench"];
+                out center 40;
+                nwr($closeAround)["amenity"="vending_machine"]$usefulVending;
+                out center 40;
             """.trimIndent()
 
             // Public Overpass servers are often busy (429/504); fall through to the next mirror.
@@ -51,13 +69,21 @@ class OverpassClient(
             throw lastError!!
         }
 
-    private fun parse(json: String): List<Poi> {
+    private fun parse(json: String): NearbyResult {
         val elements = JSONObject(json).getJSONArray("elements")
         val result = LinkedHashMap<String, Poi>()
+        val facilities = mutableListOf<Facility>()
         for (i in 0 until elements.length()) {
             val e = elements.getJSONObject(i)
             val tagsJson = e.optJSONObject("tags") ?: continue
             val tags = tagsJson.keys().asSequence().associateWith { tagsJson.getString(it) }
+            FacilityKind.of(tags["amenity"])?.let { kind ->
+                facilityOf(e, kind, tags)?.let { f ->
+                    // A toilet is often mapped both as a node and its building; keep one.
+                    if (facilities.none { it.kind == kind && it.distanceFrom(f.lat, f.lon) < SAME_FACILITY_M }) facilities += f
+                }
+                continue
+            }
             val name = tags["name:ja"] ?: tags["name"] ?: continue
             val (lat, lon) = if (e.has("lat")) {
                 e.getDouble("lat") to e.getDouble("lon")
@@ -77,7 +103,16 @@ class OverpassClient(
                 else -> seen
             }
         }
-        return result.values.toList()
+        return NearbyResult(result.values.toList(), facilities)
+    }
+
+    /** Nodes carry their position; ways and relations get a `center` from `out center`. */
+    private fun facilityOf(e: JSONObject, kind: FacilityKind, tags: Map<String, String>): Facility? {
+        val point = if (e.has("lat")) e else e.optJSONObject("center") ?: return null
+        return Facility(
+            "${e.getString("type")}/${e.getLong("id")}", kind,
+            point.getDouble("lat"), point.getDouble("lon"), tags["name:ja"] ?: tags["name"],
+        )
     }
 
     /** The outline of a way or relation, from the geometry `out geom` adds; null for nodes. */
@@ -129,6 +164,8 @@ class OverpassClient(
     }
 
     companion object {
+        private const val CLOSE_RADIUS_M = 250
+        private const val SAME_FACILITY_M = 20f
         private val ENDPOINTS = listOf(
             "https://overpass-api.de/api/interpreter",
             "https://overpass.private.coffee/api/interpreter",

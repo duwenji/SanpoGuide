@@ -10,6 +10,8 @@ import com.example.sanpoguide.guide.Provider
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.settings.TalkLevel
+import com.example.sanpoguide.settings.Threshold
+import com.example.sanpoguide.settings.Thresholds
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +49,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setCustomBaseUrl(url: String) = edit { it.copy(customBaseUrl = url) }
     fun setTalkLevel(level: TalkLevel) = edit { it.copy(talkLevel = level) }
 
+    /** [value] null (blank or not a number) is kept as invalid, so the field shows an error. */
+    fun setThreshold(t: Threshold, value: Int?) = edit { it.copy(thresholds = it.thresholds.with(t, value ?: INVALID)) }
+    fun resetThresholds() = edit { it.copy(thresholds = Thresholds()) }
+
     fun save() = repo.save(_draft.value)
 
     fun runTest() {
@@ -81,5 +87,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private fun clearTest() {
         testJob?.cancel()
         _test.value = TestState.Idle
+    }
+
+    companion object {
+        /** Below every [Threshold.min]. */
+        const val INVALID = -1
     }
 }

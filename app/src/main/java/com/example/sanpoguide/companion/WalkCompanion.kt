@@ -18,6 +18,10 @@ sealed interface TalkEvent {
     data class Revisit(val poi: Poi, val pastVisits: List<SpotVisit>) : TalkEvent
     data object Milestone : TalkEvent
     data class Rest(val minutes: Int) : TalkEvent
+    data class Sunset(val minutes: Int) : TalkEvent
+    data class WeatherTurn(val change: WeatherChange) : TalkEvent
+    /** [direction] is relative to the walking direction, or null when the heading is unknown. */
+    data class NearFacility(val advice: FacilityAdvice, val direction: String?) : TalkEvent
     data class Finish(val walk: WalkRecord) : TalkEvent
 }
 
@@ -54,6 +58,9 @@ class WalkCompanion(
         is TalkEvent.Revisit -> Prompts.Event.REVISIT
         TalkEvent.Milestone -> Prompts.Event.MILESTONE
         is TalkEvent.Rest -> Prompts.Event.REST
+        is TalkEvent.Sunset -> Prompts.Event.SUNSET
+        is TalkEvent.WeatherTurn -> Prompts.Event.WEATHER_CHANGE
+        is TalkEvent.NearFacility -> Prompts.Event.FACILITY
         is TalkEvent.Finish -> Prompts.Event.FINISH
     }
 
@@ -113,6 +120,30 @@ class WalkCompanion(
             )
         }
         is TalkEvent.Rest -> mapOf("minutes" to event.minutes)
+        is TalkEvent.Sunset -> mapOf("minutes" to event.minutes)
+        is TalkEvent.WeatherTurn -> event.change.let { c ->
+            mapOf(
+                "description" to c.description,
+                // Forecasts aren't minute-exact: "まもなく" under 10 minutes, else steps of 5.
+                "minutes" to c.minutes.takeIf { it >= 10 }?.let { (it + 2) / 5 * 5 },
+                "thunder" to (c.kind == WeatherChangeKind.THUNDER),
+                "heavy_rain" to (c.kind == WeatherChangeKind.HEAVY_RAIN),
+                "rain" to (c.kind == WeatherChangeKind.RAIN),
+            )
+        }
+        is TalkEvent.NearFacility -> event.advice.let { a ->
+            mapOf(
+                "label" to a.facility.kind.label,
+                "name" to a.facility.name,
+                // Rounded: GPS isn't accurate enough for "73m" to mean anything.
+                "distance_m" to ((a.distanceM + 5) / 10 * 10).coerceAtLeast(10),
+                "direction" to event.direction,
+                "need_shelter" to (a.need == FacilityNeed.SHELTER),
+                "need_toilet" to (a.need == FacilityNeed.TOILET),
+                "need_drink" to (a.need == FacilityNeed.DRINK),
+                "need_seat" to (a.need == FacilityNeed.SEAT),
+            )
+        }
         is TalkEvent.Finish -> mapOf(
             "km" to km(event.walk.distanceM),
             "minutes" to minutes(event.walk.durationMs),

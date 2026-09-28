@@ -17,6 +17,21 @@ class PromptFilesTest {
 
     private val spot = mapOf("name" to "鶴岡八幡宮", "category" to "神社")
 
+    private val noNeed = mapOf("need_shelter" to false, "need_toilet" to false, "need_drink" to false, "need_seat" to false)
+    private val weatherChangeSamples = listOf(
+        mapOf("description" to "雷雨", "minutes" to 25, "thunder" to true, "heavy_rain" to false, "rain" to false),
+        mapOf("description" to "霧雨", "minutes" to null, "thunder" to false, "heavy_rain" to false, "rain" to true),
+    )
+
+    private val facilitySamples = listOf(
+        noNeed + mapOf(
+            "label" to "トイレ", "name" to "鎌倉駅東口公衆トイレ", "distance_m" to 80, "direction" to "右手",
+            "need_toilet" to true,
+        ),
+        noNeed + mapOf("label" to "休憩所", "name" to null, "distance_m" to 120, "direction" to null, "need_shelter" to true),
+        noNeed + mapOf("label" to "自動販売機", "name" to null, "distance_m" to 40, "direction" to "前方", "need_drink" to true),
+    )
+
     /** Sample values per file; files with two cases cover both the "empty" and "full" shapes. */
     private val samples: Map<String, List<Map<String, Any?>>> = mapOf(
         Prompts.Guide.SYSTEM to listOf(emptyMap()),
@@ -52,6 +67,9 @@ class PromptFilesTest {
         ),
         Prompts.event(Prompts.Event.MILESTONE) to listOf(emptyMap()),
         Prompts.event(Prompts.Event.REST) to listOf(mapOf("minutes" to 4)),
+        Prompts.event(Prompts.Event.SUNSET) to listOf(mapOf("minutes" to 25)),
+        Prompts.event(Prompts.Event.WEATHER_CHANGE) to weatherChangeSamples,
+        Prompts.event(Prompts.Event.FACILITY) to facilitySamples,
         Prompts.event(Prompts.Event.FINISH) to listOf(
             mapOf("km" to "2.3", "minutes" to 45, "spot_count" to 2, "spots" to "段葛、舞殿"),
             mapOf("km" to "0.4", "minutes" to 6, "spot_count" to 0, "spots" to null),
@@ -67,6 +85,9 @@ class PromptFilesTest {
         ),
         Prompts.Fallback.companion(Prompts.Event.MILESTONE) to listOf(mapOf("minutes" to 15, "km" to "1.0")),
         Prompts.Fallback.companion(Prompts.Event.REST) to listOf(mapOf("minutes" to 4)),
+        Prompts.Fallback.companion(Prompts.Event.SUNSET) to listOf(mapOf("minutes" to 25)),
+        Prompts.Fallback.companion(Prompts.Event.WEATHER_CHANGE) to weatherChangeSamples,
+        Prompts.Fallback.companion(Prompts.Event.FACILITY) to facilitySamples,
         Prompts.Fallback.companion(Prompts.Event.FINISH) to listOf(
             mapOf("km" to "2.3", "minutes" to 45, "spot_count" to 2, "spots" to null),
         ),
@@ -107,5 +128,11 @@ class PromptFilesTest {
         val revisit = prompts.render(Prompts.event(Prompts.Event.REVISIT), samples.getValue(Prompts.event(Prompts.Event.REVISIT))[1])
         assertTrue(revisit.contains("通算2回目で、前回は3日前です。"))
         assertFalse(revisit.contains("今日だけで"))
+
+        val shelter = prompts.render(Prompts.Fallback.companion(Prompts.Event.FACILITY), facilitySamples[1])
+        assertEquals("120mほどのところに休憩所があります。\n雨宿りにどうぞ。", shelter)
+
+        val drizzle = prompts.render(Prompts.Fallback.companion(Prompts.Event.WEATHER_CHANGE), weatherChangeSamples[1])
+        assertEquals("まもなく霧雨になりそうです。\n傘の用意をしておきましょうか。", drizzle)
     }
 }
