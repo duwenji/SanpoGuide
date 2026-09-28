@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.sanpoguide.guide.Provider
 import com.example.sanpoguide.settings.TalkLevel
+import com.example.sanpoguide.settings.Threshold
+import com.example.sanpoguide.settings.Thresholds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,12 +163,28 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            SectionTitle("案内のしきい値")
+            Text(
+                "天気の急変・日の入り・近くの施設を、どんなときに知らせるかです。" +
+                    "施設の距離は、周辺の検索範囲（ベンチ・自動販売機は 250m、ほかは 600m）より遠くは案内できません。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ThresholdFields(draft.thresholds, onChange = viewModel::setThreshold)
+            TextButton(onClick = viewModel::resetThresholds, enabled = draft.thresholds.values.isNotEmpty()) {
+                Text("しきい値を既定値に戻す")
+            }
+
+            val thresholdsValid = draft.thresholds.values.all { (t, v) -> t.isValid(v) }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = viewModel::runTest, enabled = test != TestState.Running) {
                     Text("接続テスト")
                 }
-                Button(onClick = { viewModel.save(); onClose() }) { Text("保存") }
+                Button(onClick = { viewModel.save(); onClose() }, enabled = thresholdsValid) { Text("保存") }
+            }
+            if (!thresholdsValid) {
+                Text("しきい値に範囲外の値があります", color = MaterialTheme.colorScheme.error)
             }
             TestResult(test)
 
@@ -202,6 +220,38 @@ private fun ApiKeyField(value: String, onValueChange: (String) -> Unit) {
         },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** One number field per [Threshold], under its group's heading. */
+@Composable
+private fun ThresholdFields(thresholds: Thresholds, onChange: (Threshold, Int?) -> Unit) {
+    Threshold.entries.groupBy { it.group }.forEach { (group, items) ->
+        Text(group, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+        items.forEach { t ->
+            val value = thresholds.values[t] ?: t.default
+            val valid = t.isValid(value)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.label, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "既定値 ${t.default}${t.unit}（${t.min}〜${t.max}）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (valid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                OutlinedTextField(
+                    value = if (value == SettingsViewModel.INVALID) "" else value.toString(),
+                    onValueChange = { text -> onChange(t, text.filter(Char::isDigit).take(4).toIntOrNull()) },
+                    suffix = { Text(t.unit) },
+                    isError = !valid,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(120.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable

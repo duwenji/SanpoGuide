@@ -9,11 +9,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.sanpoguide.R
+import com.example.sanpoguide.data.Facility
+import com.example.sanpoguide.data.FacilityKind
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.infowindow.InfoWindow
 
 /** GSI (Geospatial Information Authority of Japan) standard map tiles. No API key needed. */
 private val GsiStandard = XYTileSource(
@@ -22,17 +25,29 @@ private val GsiStandard = XYTileSource(
     "出典：国土地理院",
 )
 
-/** Map showing the user's position and nearby spots. */
+/** Marker for each facility kind; the colors double as the legend in the nearest-facilities bar. */
+fun facilityDot(kind: FacilityKind) = when (kind) {
+    FacilityKind.TOILETS -> R.drawable.facility_toilet_dot
+    FacilityKind.DRINKING_WATER -> R.drawable.facility_water_dot
+    FacilityKind.VENDING_MACHINE -> R.drawable.facility_vending_dot
+    FacilityKind.SHELTER -> R.drawable.facility_shelter_dot
+    FacilityKind.BENCH -> R.drawable.facility_bench_dot
+}
+
+/** Map showing the user's position, nearby spots and amenities. Pans to [focus] when it changes. */
 @Composable
 fun SpotMap(
     location: Location?,
     spots: List<SpotItem>,
+    facilities: List<FacilityItem>,
+    focus: Facility?,
     onSpotClick: (SpotItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val spotIcon = remember { ContextCompat.getDrawable(context, R.drawable.spot_dot) }
     val meIcon = remember { ContextCompat.getDrawable(context, R.drawable.me_dot) }
+    val facilityIcons = remember { FacilityKind.entries.associateWith { ContextCompat.getDrawable(context, facilityDot(it)) } }
     val mapView = remember {
         MapView(context).apply {
             setTileSource(GsiStandard)
@@ -43,6 +58,7 @@ fun SpotMap(
     val copyright = remember { CopyrightOverlay(context) }
     // Recenter only when the user has moved noticeably, so panning isn't constantly undone.
     val centeredAt = remember { arrayOfNulls<Location>(1) }
+    val focusedOn = remember { arrayOfNulls<Facility>(1) }
 
     DisposableEffect(mapView) {
         mapView.onResume()
@@ -50,7 +66,19 @@ fun SpotMap(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier) { map ->
+        // Markers are rebuilt below; an open bubble would be left pointing at a removed one.
+        InfoWindow.closeAllInfoWindowsOn(map)
         map.overlays.clear()
+        // Under the spots, so a bench in a park doesn't cover the park.
+        facilities.forEach { item ->
+            val f = item.facility
+            map.overlays += Marker(map).apply {
+                position = GeoPoint(f.lat, f.lon)
+                icon = facilityIcons[f.kind]
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                title = f.name?.let { "${f.kind.label}（$it）" } ?: f.kind.label
+            }
+        }
         spots.forEach { item ->
             map.overlays += Marker(map).apply {
                 position = GeoPoint(item.poi.lat, item.poi.lon)
@@ -71,6 +99,10 @@ fun SpotMap(
                 map.controller.animateTo(GeoPoint(location.latitude, location.longitude))
                 centeredAt[0] = location
             }
+        }
+        if (focus != null && focus != focusedOn[0]) {
+            map.controller.animateTo(GeoPoint(focus.lat, focus.lon))
+            focusedOn[0] = focus
         }
         map.overlays += copyright
         map.invalidate()

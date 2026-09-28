@@ -1,7 +1,10 @@
 package com.example.sanpoguide.ui
 
+import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +25,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Roofing
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.Wc
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +57,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.filled.History
@@ -71,6 +82,9 @@ fun MainScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val walking by viewModel.walking.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
+    val facilities by viewModel.facilities.collectAsStateWithLifecycle()
+    val nearestFacilities by viewModel.nearestFacilities.collectAsStateWithLifecycle()
+    val focus by viewModel.focus.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -125,9 +139,14 @@ fun MainScreen(
                     )
                 }
             }
+            if (nearestFacilities.isNotEmpty()) {
+                FacilityBar(nearestFacilities, onClick = { viewModel.focus(it.facility) })
+            }
             SpotMap(
                 location = location,
                 spots = spots,
+                facilities = facilities,
+                focus = focus,
                 onSpotClick = viewModel::select,
                 modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(),
             )
@@ -222,6 +241,38 @@ private fun GuideSheet(spot: SelectedSpot, onSpeak: (String) -> Unit, onStop: ()
     }
 }
 
+/** The nearest facility of each kind; tapping one pans the map to it. */
+@Composable
+private fun FacilityBar(items: List<FacilityItem>, onClick: (FacilityItem) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { item ->
+            val kind = item.facility.kind
+            AssistChip(
+                onClick = { onClick(item) },
+                label = { Text(listOfNotNull(kind.label, item.distanceM?.let(::formatMeters)).joinToString(" ")) },
+                leadingIcon = {
+                    // The map marker's dot, so the chips also serve as the map legend.
+                    Box(contentAlignment = Alignment.Center) {
+                        Image(painterResource(facilityDot(kind)), contentDescription = null, Modifier.size(20.dp))
+                        Icon(facilityIcon(kind), contentDescription = null, Modifier.size(12.dp), tint = Color.White)
+                    }
+                },
+            )
+        }
+    }
+}
+
+private fun facilityIcon(kind: FacilityKind) = when (kind) {
+    FacilityKind.TOILETS -> Icons.Filled.Wc
+    FacilityKind.DRINKING_WATER -> Icons.Filled.WaterDrop
+    FacilityKind.VENDING_MACHINE -> Icons.Filled.LocalDrink
+    FacilityKind.SHELTER -> Icons.Filled.Roofing
+    FacilityKind.BENCH -> Icons.Filled.Chair
+}
+
 @Composable
 private fun Banner(text: String, onClick: (() -> Unit)? = null) {
     Surface(
@@ -243,5 +294,6 @@ private fun PermissionPrompt(onRequest: () -> Unit) {
     }
 }
 
-private fun formatDistance(poi: Poi, m: Int): String =
-    if (poi.isInside(m)) "敷地内" else if (m < 1000) "${m}m" else "%.1fkm".format(m / 1000f)
+private fun formatDistance(poi: Poi, m: Int): String = if (poi.isInside(m)) "敷地内" else formatMeters(m)
+
+private fun formatMeters(m: Int): String = if (m < 1000) "${m}m" else "%.1fkm".format(m / 1000f)

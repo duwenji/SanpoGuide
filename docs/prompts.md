@@ -22,12 +22,15 @@ prompts/
 │       ├── revisit.md             過去に訪れたスポットへの再訪
 │       ├── milestone.md           一定の距離・時間を歩いた
 │       ├── rest.md                同じ場所にとどまった（休憩）
+│       ├── sunset.md              日の入りが近い
+│       ├── weather_change.md      天気が崩れる予報（雷雨・強い雨・降り始め）
+│       ├── facility.md            状況に合った施設（トイレ・休憩所など）が近くにある
 │       └── finish.md              散歩の終了（振り返り）
 ├── fallback/                  定型文（AI を使えないとき、そのまま読み上げる）
 │   ├── guide.md                 スポット解説（API キー未設定）
 │   ├── nearby.md                スポット解説（AI の呼び出しに失敗）
 │   └── companion/               話しかけ（API キー未設定、または失敗）
-│       └── start.md / revisit.md / milestone.md / rest.md / finish.md
+│       └── start.md / revisit.md / milestone.md / rest.md / sunset.md / weather_change.md / facility.md / finish.md
 └── connection_test/           設定画面の「接続テスト」
     ├── system.md
     └── user.md
@@ -45,12 +48,15 @@ AI に送るのは「システムプロンプト」と「ユーザープロン�
 | 過去に訪れたスポットに再び近づいた | `companion/system` | `companion/situation` ＋ `companion/events/revisit` | `fallback/companion/revisit` |
 | 一定の距離・時間を歩いた | `companion/system` | `companion/situation` ＋ `companion/events/milestone` | `fallback/companion/milestone` |
 | 同じ場所に 4 分以上とどまった | `companion/system` | `companion/situation` ＋ `companion/events/rest` | `fallback/companion/rest` |
+| 1 時間以内に天気が崩れる予報 | `companion/system` | `companion/situation` ＋ `companion/events/weather_change` | `fallback/companion/weather_change` |
+| 日の入りの 30〜5 分前 | `companion/system` | `companion/situation` ＋ `companion/events/sunset` | `fallback/companion/sunset` |
+| 状況に合った施設が近くにある | `companion/system` | `companion/situation` ＋ `companion/events/facility` | `fallback/companion/facility` |
 | 散歩の終了 | `companion/system` | `companion/situation` ＋ `companion/events/finish` | `fallback/companion/finish` |
 | 設定画面の接続テスト | `connection_test/system` | `connection_test/user` | — |
 
 散歩の友のユーザープロンプトは、`companion/situation` の後ろに空行を挟んで出来事のファイルをつなげたもの。
 
-「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と設定の「話しかけの頻度」（`TalkLevel`）で決まる。
+「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と設定の「話しかけの頻度」（`TalkLevel`）で決まる。施設をどの条件で案内するかは `FacilityAdvisor`、天気の急変の判定は `WeatherChangeDetector` で決まる。
 
 ## 書き方
 
