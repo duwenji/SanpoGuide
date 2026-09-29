@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SanpoGuide 構造図</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#F1F4F1; --surface:#FFFFFF; --band:#E6ECE7; --ink:#1B2621; --muted:#58675F;
+  --line:#BFCBC3; --accent:#2B7553; --accent-soft:#DCEDE3; --ext:#3A5A99; --hot:#A8621A; --hot-soft:#F6E8D8;
+  --sans:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111714; --surface:#19211D; --band:#1E2823; --ink:#E2EAE5; --muted:#9AABA2;
+    --line:#35433C; --accent:#5DBB8C; --accent-soft:#1F3A2C; --ext:#8EA8E2; --hot:#E3A35C; --hot-soft:#3A2A17;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111714; --surface:#19211D; --band:#1E2823; --ink:#E2EAE5; --muted:#9AABA2;
+  --line:#35433C; --accent:#5DBB8C; --accent-soft:#1F3A2C; --ext:#8EA8E2; --hot:#E3A35C; --hot-soft:#3A2A17;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.75;padding-inline:16px}
+main{max-width:1060px;margin:0 auto;padding-block:40px 72px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{text-wrap:balance;line-height:1.35;margin:0}
+h1{font-size:clamp(28px,4vw,40px);font-weight:900;letter-spacing:.02em}
+h2{font-size:22px;font-weight:700}
+p{margin:0;max-width:68ch}
+code{font-family:var(--mono);font-size:.88em;background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+header{display:flex;flex-direction:column;gap:14px}
+.facts{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted)}
+.facts b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+section{display:flex;flex-direction:column;gap:16px}
+.sec-head{display:flex;flex-direction:column;gap:6px}
+figure{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.scroll{overflow-x:auto}
+figure svg{display:block;width:100%;min-width:760px;height:auto;color:var(--muted)}
+figcaption{font-size:13.5px;color:var(--muted);max-width:80ch}
+/* SVG vocabulary */
+.band{fill:var(--band)}
+.bl{fill:var(--muted);font-size:12px;font-weight:700;text-anchor:middle}
+.bl-m{fill:var(--muted);font-family:var(--mono);font-size:11px;text-anchor:middle}
+.bx{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.bx-hot{fill:var(--hot-soft);stroke:var(--hot);stroke-width:1.6}
+.bx-acc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.4}
+.bx-ext{fill:var(--surface);stroke:var(--ext);stroke-width:1.2;stroke-dasharray:5 4}
+.bx-dash{fill:var(--surface);stroke:var(--line);stroke-width:1.2;stroke-dasharray:5 4}
+.t{fill:var(--ink);font-size:13px;font-weight:700;text-anchor:middle}
+.tm{fill:var(--ink);font-family:var(--mono);font-size:12.5px;font-weight:600;text-anchor:middle}
+.s{fill:var(--muted);font-size:11px;text-anchor:middle}
+.sm{fill:var(--muted);font-family:var(--mono);font-size:10.5px;text-anchor:middle}
+.te{fill:var(--ext);font-size:13px;font-weight:700;text-anchor:middle}
+.th{fill:var(--hot);font-family:var(--mono);font-size:13px;font-weight:600;text-anchor:middle}
+.lbl{fill:var(--muted);font-size:11px}
+.left{text-anchor:start}
+.ar{stroke:currentColor;stroke-width:1.4;fill:none}
+.ar-hot{stroke:var(--hot);stroke-width:1.6;fill:none}
+.div{stroke:var(--line);stroke-width:1;stroke-dasharray:3 3}
+.num{fill:var(--accent);font-family:var(--mono);font-size:12px;font-weight:600}
+.it{fill:var(--ink);font-size:12.5px}
+.note{fill:var(--muted);font-size:10.5px;text-anchor:end}
+/* tables */
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:700;background:var(--band)}
+td.pk{font-family:var(--mono);font-weight:600;color:var(--accent);white-space:nowrap}
+td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.loc{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.bar{height:6px;border-radius:3px;background:var(--accent)}
+.plan{border:1px dashed var(--ext);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.plan h3{font-size:16px;color:var(--ext)}
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <div class="eyebrow">SANPOGUIDE · ANDROID / KOTLIN / JETPACK COMPOSE</div>
+    <h1>散策ガイドの構造図</h1>
+    <p>アプリ全体を 4 枚の図で説明します。最初の図で「どこに何があるか」をつかみ、残りの図で散策モードの話しかけ・スポット解説・雰囲気という 3 つの主要な流れを追います。</p>
+    <div class="facts">
+      <span>ソース <b>41 ファイル / 約 5,050 行</b></span>
+      <span>パッケージ <b>10</b></span>
+      <span>画面 <b>3</b>（メイン・設定・記録）</span>
+      <span>常駐サービス <b>1</b>（WalkService）</span>
+      <span>外部サービス <b>5</b></span>
+    </div>
+  </header>
+
+  <!-- 1. Overview -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">図 1 · 全体</div>
+      <h2>画面とサービスは、SanpoApp が持つ共有部品を使う</h2>
+      <p>DI ライブラリは使っていません。<code>SanpoApp.onCreate()</code> が部品を 1 つずつ作り、画面の ViewModel と <code>WalkService</code> は <code>(application as SanpoApp).spots</code> のように直接取り出します。</p>
+    </div>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 616" role="img" aria-label="4 層の構造図。画面層の ViewModel と常駐処理の WalkService が、SanpoApp の共有部品（prompt, history, settings, mood, data, guide, companion, sound）を参照し、共有部品が外部サービスへ通信する。">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          <marker id="a1h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--hot)"/></marker>
+        </defs>
+        <!-- bands -->
+        <rect class="band" x="100" y="12" width="880" height="132" rx="12"/>
+        <rect class="band" x="100" y="160" width="880" height="84" rx="12"/>
+        <rect class="band" x="100" y="260" width="880" height="224" rx="12"/>
+        <rect class="band" x="100" y="500" width="880" height="104" rx="12"/>
+        <text class="bl" x="50" y="72">画面</text><text class="bl-m" x="50" y="88">ui</text>
+        <text class="bl" x="50" y="198">常駐処理</text><text class="bl-m" x="50" y="214">walk</text>
+        <text class="bl" x="50" y="366">共有部品</text><text class="bl-m" x="50" y="382">SanpoApp</text>
+        <text class="bl" x="50" y="548">外部</text><text class="bl-m" x="50" y="564">端末</text>
+
+        <!-- band A: screens -->
+        <rect class="bx" x="116" y="28" width="140" height="44" rx="8"/><text class="tm" x="186" y="55">MainActivity</text>
+        <rect class="bx" x="276" y="28" width="200" height="44" rx="8"/><text class="tm" x="376" y="47">MainScreen</text><text class="sm" x="376" y="63">SpotMap · CompanionCard</text>
+        <rect class="bx" x="496" y="28" width="150" height="44" rx="8"/><text class="tm" x="571" y="55">SettingsScreen</text>
+        <rect class="bx" x="666" y="28" width="140" height="44" rx="8"/><text class="tm" x="736" y="55">HistoryScreen</text>
+        <rect class="bx-ext" x="826" y="28" width="138" height="44" rx="8"/><text class="te" x="895" y="47">地理院タイル</text><text class="s" x="895" y="63">SpotMap が直接取得</text>
+        <rect class="bx" x="276" y="90" width="200" height="36" rx="8"/><text class="tm" x="376" y="113">MainViewModel</text>
+        <rect class="bx" x="496" y="90" width="150" height="36" rx="8"/><text class="tm" x="571" y="113">SettingsViewModel</text>
+        <rect class="bx" x="666" y="90" width="140" height="36" rx="8"/><text class="tm" x="736" y="113">HistoryViewModel</text>
+        <line class="ar" x1="376" y1="72" x2="376" y2="88" marker-end="url(#a1)"/>
+        <line class="ar" x1="571" y1="72" x2="571" y2="88" marker-end="url(#a1)"/>
+        <line class="ar" x1="736" y1="72" x2="736" y2="88" marker-end="url(#a1)"/>
+
+        <!-- band B: service -->
+        <line class="ar-hot" x1="186" y1="72" x2="186" y2="174" marker-end="url(#a1h)"/>
+        <text class="lbl left" x="194" y="154" style="fill:var(--hot)">開始・終了</text>
+        <rect class="bx-hot" x="116" y="176" width="230" height="52" rx="8"/>
+        <text class="th" x="231" y="197">WalkService</text>
+        <text class="s" x="231" y="216">位置の追跡・話す判断・通知・背景音</text>
+
+        <!-- arrows into band C -->
+        <line class="ar" x1="231" y1="228" x2="231" y2="286" marker-end="url(#a1)"/>
+        <line class="ar" x1="376" y1="126" x2="376" y2="286" marker-end="url(#a1)"/>
+        <line class="ar" x1="571" y1="126" x2="571" y2="286" marker-end="url(#a1)"/>
+        <line class="ar" x1="736" y1="126" x2="736" y2="286" marker-end="url(#a1)"/>
+        <text class="lbl" x="384" y="254">app.spots / guides / feed …</text>
+
+        <!-- band C header -->
+        <text class="lbl left" x="760" y="280">onCreate() で生成・共有</text>
+
+        <!-- band C row 1 -->
+        <rect class="bx" x="116" y="296" width="200" height="72" rx="8"/><text class="tm" x="216" y="318" style="fill:var(--accent)">prompt</text><text class="sm" x="216" y="338">PromptTemplates</text><text class="sm" x="216" y="355">← assets/prompts/*.md</text>
+        <rect class="bx" x="328" y="296" width="200" height="72" rx="8"/><text class="tm" x="428" y="318" style="fill:var(--accent)">history</text><text class="sm" x="428" y="338">HistoryStore</text><text class="s" x="428" y="355">walk_history.json（端末内）</text>
+        <rect class="bx" x="540" y="296" width="200" height="72" rx="8"/><text class="tm" x="640" y="318" style="fill:var(--accent)">settings</text><text class="sm" x="640" y="338">SettingsRepository</text><text class="sm" x="640" y="355">KeyCipher · Threshold</text>
+        <rect class="bx" x="752" y="296" width="200" height="72" rx="8"/><text class="tm" x="852" y="318" style="fill:var(--accent)">mood</text><text class="sm" x="852" y="338">MoodSource · Mood</text><text class="sm" x="852" y="355">PlaceGuess</text>
+        <!-- band C row 2 -->
+        <rect class="bx" x="116" y="392" width="200" height="72" rx="8"/><text class="tm" x="216" y="414" style="fill:var(--accent)">data</text><text class="sm" x="216" y="434">SpotRepository</text><text class="sm" x="216" y="451">OverpassClient · SpotPhotos</text>
+        <rect class="bx" x="328" y="392" width="200" height="72" rx="8"/><text class="tm" x="428" y="414" style="fill:var(--accent)">guide</text><text class="sm" x="428" y="434">GuideRepository · Speaker</text><text class="sm" x="428" y="451">LlmClient · Provider</text>
+        <rect class="bx" x="540" y="392" width="200" height="72" rx="8"/><text class="tm" x="640" y="414" style="fill:var(--accent)">companion</text><text class="sm" x="640" y="434">WalkCompanion · CompanionFeed</text><text class="sm" x="640" y="451">WeatherClient ほか</text>
+        <rect class="bx-dash" x="752" y="392" width="200" height="72" rx="8"/><text class="tm" x="852" y="414" style="fill:var(--accent)">sound</text><text class="sm" x="852" y="434">AmbientPlayer · Voices</text><text class="s" x="852" y="451">※ WalkService が生成</text>
+
+        <!-- band D: external -->
+        <line class="ar" x1="163" y1="464" x2="163" y2="518" marker-end="url(#a1)"/>
+        <line class="ar" x1="269" y1="464" x2="269" y2="518" marker-end="url(#a1)"/>
+        <line class="ar" x1="428" y1="464" x2="428" y2="518" marker-end="url(#a1)"/>
+        <line class="ar" x1="640" y1="464" x2="640" y2="518" marker-end="url(#a1)"/>
+        <line class="ar" x1="852" y1="464" x2="852" y2="518" marker-end="url(#a1)"/>
+        <rect class="bx-ext" x="116" y="520" width="94" height="64" rx="8"/><text class="te" x="163" y="546">Overpass</text><text class="s" x="163" y="564">スポット・施設</text>
+        <rect class="bx-ext" x="222" y="520" width="94" height="64" rx="8"/><text class="te" x="269" y="546">Wikimedia</text><text class="s" x="269" y="564">写真</text>
+        <rect class="bx-ext" x="328" y="520" width="200" height="64" rx="8"/><text class="te" x="428" y="546">AI サービス</text><text class="s" x="428" y="564">Claude / OpenAI 互換 API</text>
+        <rect class="bx-ext" x="540" y="520" width="200" height="64" rx="8"/><text class="te" x="640" y="546">Open-Meteo</text><text class="s" x="640" y="564">天気・予報・日の入り</text>
+        <rect class="bx-ext" x="752" y="520" width="200" height="64" rx="8"/><text class="te" x="852" y="546">端末</text><text class="s" x="852" y="564">TTS・音声出力・GPS</text>
+      </svg>
+      </div>
+      <figcaption>橙色の <code>WalkService</code> がアプリの中心です。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットを見て「いま何を話すか」を決めます。点線の枠は外部サービスです。<code>sound</code> だけは SanpoApp ではなく WalkService が必要になったときに作ります。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 2. Walk mode -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">図 2 · 散策モード</div>
+      <h2>話しかけるまでの流れ</h2>
+      <p>位置が更新されるたびと、一定間隔のタイマーで <code>maybeTalk()</code> が呼ばれます。判定は上から順に行い、最初に当たった 1 件だけを話します。</p>
+    </div>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 470" role="img" aria-label="散策モードの流れ。位置の更新とタイマーが maybeTalk を呼び、6 つの条件を上から判定して、当たった 1 件を文にし、AI または定型文で生成して、読み上げ・カード表示・通知・記録の保存に送る。">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <!-- triggers -->
+        <rect class="bx" x="20" y="60" width="150" height="56" rx="8"/><text class="t" x="95" y="84">位置の更新</text><text class="s" x="95" y="102">10 秒・10m ごと</text>
+        <rect class="bx" x="20" y="170" width="150" height="56" rx="8"/><text class="t" x="95" y="194">タイマー</text><text class="s" x="95" y="212">止まっていても判定</text>
+        <line class="ar" x1="170" y1="88" x2="208" y2="88" marker-end="url(#a2)"/>
+        <line class="ar" x1="170" y1="198" x2="208" y2="198" marker-end="url(#a2)"/>
+        <text class="s" x="95" y="140">＋ 300m 移動で</text><text class="s" x="95" y="155">スポット再検索</text>
+
+        <!-- maybeTalk -->
+        <rect class="bx-hot" x="210" y="24" width="270" height="330" rx="10"/>
+        <text class="th" x="345" y="50">maybeTalk()</text>
+        <text class="num" x="228" y="86">1</text><text class="it" x="246" y="86">天気の急変</text><text class="note" x="466" y="86">頻度に関係なく</text>
+        <text class="num" x="228" y="118">2</text><text class="it" x="246" y="118">スポット 60m 以内</text><text class="note" x="466" y="118">初訪問 / 再訪</text>
+        <text class="num" x="228" y="150">3</text><text class="it" x="246" y="150">日の入り前</text><text class="note" x="466" y="150">頻度に関係なく</text>
+        <line class="div" x1="224" y1="172" x2="466" y2="172"/>
+        <text class="note" x="466" y="190">ここから「雑談の間隔」を守る</text>
+        <text class="num" x="228" y="222">4</text><text class="it" x="246" y="222">施設の案内</text><text class="note" x="466" y="222">FacilityAdvisor</text>
+        <text class="num" x="228" y="254">5</text><text class="it" x="246" y="254">休憩の声かけ</text><text class="note" x="466" y="254">4 分とどまる</text>
+        <text class="num" x="228" y="286">6</text><text class="it" x="246" y="286">距離・時間の区切り</text><text class="note" x="466" y="286">TalkLevel</text>
+        <text class="s" x="345" y="322">読み上げ中は判定しない</text>
+        <text class="s" x="345" y="338">上から見て最初の 1 件だけ話す</text>
+
+        <!-- compose -->
+        <line class="ar" x1="480" y1="140" x2="528" y2="140" marker-end="url(#a2)"/>
+        <text class="lbl" x="484" y="132">TalkEvent</text>
+        <rect class="bx-acc" x="530" y="60" width="230" height="150" rx="10"/>
+        <text class="t" x="645" y="86">文を作る</text>
+        <text class="s" x="645" y="112">初訪問のスポット</text>
+        <text class="sm" x="645" y="128">GuideRepository.guideFor()</text>
+        <text class="s" x="645" y="154">それ以外（再訪を含む）</text>
+        <text class="sm" x="645" y="170">WalkCompanion.say()</text>
+        <text class="s" x="645" y="196">文面は assets/prompts/ から</text>
+
+        <!-- generators -->
+        <line class="ar" x1="760" y1="100" x2="808" y2="100" marker-end="url(#a2)"/>
+        <text class="lbl" x="766" y="92">生成</text>
+        <line class="ar" x1="760" y1="178" x2="808" y2="178" marker-end="url(#a2)"/>
+        <text class="lbl" x="766" y="170">失敗時</text>
+        <rect class="bx-ext" x="810" y="72" width="170" height="56" rx="8"/><text class="te" x="895" y="96">AI サービス</text><text class="s" x="895" y="114">LlmClient</text>
+        <rect class="bx-dash" x="810" y="150" width="170" height="56" rx="8"/><text class="t" x="895" y="174">定型文</text><text class="s" x="895" y="192">キー未設定・通信失敗</text>
+
+        <!-- speakLine -->
+        <line class="ar" x1="645" y1="210" x2="645" y2="266" marker-end="url(#a2)"/>
+        <rect class="bx" x="545" y="268" width="200" height="44" rx="8"/><text class="tm" x="645" y="295">speakLine(text)</text>
+
+        <!-- outputs -->
+        <line class="ar" x1="620" y1="312" x2="340" y2="396" marker-end="url(#a2)"/>
+        <line class="ar" x1="635" y1="312" x2="545" y2="396" marker-end="url(#a2)"/>
+        <line class="ar" x1="655" y1="312" x2="740" y2="396" marker-end="url(#a2)"/>
+        <line class="ar" x1="670" y1="312" x2="900" y2="396" marker-end="url(#a2)"/>
+        <rect class="bx" x="260" y="398" width="160" height="56" rx="8"/><text class="t" x="340" y="422">読み上げ</text><text class="sm" x="340" y="440">Speaker (TTS)</text>
+        <rect class="bx" x="455" y="398" width="180" height="56" rx="8"/><text class="t" x="545" y="422">画面のカード</text><text class="sm" x="545" y="440">CompanionFeed</text>
+        <rect class="bx" x="670" y="398" width="140" height="56" rx="8"/><text class="t" x="740" y="422">通知</text><text class="s" x="740" y="440">雷雨は音つき</text>
+        <rect class="bx" x="830" y="398" width="150" height="56" rx="8"/><text class="t" x="905" y="422">記録を保存</text><text class="sm" x="905" y="440">HistoryStore</text>
+      </svg>
+      </div>
+      <figcaption>順番はコードの判定順（<code>walk/WalkService.kt</code> の <code>maybeTalk()</code>）そのままです。README の表とは並びが違い、実際には「スポット」が「日の入り」より先に判定されます。天気と日の入りは安全に関わるため、話しかけの頻度設定を無視します。記録の保存はスポット案内・距離の区切り・散歩の終了のときに行います。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 3. Spot tap -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">図 3 · スポット解説</div>
+      <h2>地図でスポットをタップしたとき</h2>
+      <p>解説と写真は別々に取りに行きます。解説は「AI サービス・モデル・スポット」の組み合わせでキャッシュされるため、同じスポットで料金がかかるのは 1 回だけです。</p>
+    </div>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 214" role="img" aria-label="スポットをタップすると MainViewModel.select が、解説を GuideRepository 経由で AI サービスから、写真を SpotPhotos 経由で Wikimedia から取得し、解説パネルに表示する。">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <rect class="bx" x="20" y="80" width="140" height="54" rx="8"/><text class="t" x="90" y="103">タップ</text><text class="sm" x="90" y="121">MainScreen</text>
+        <line class="ar" x1="160" y1="107" x2="198" y2="107" marker-end="url(#a3)"/>
+        <rect class="bx" x="200" y="80" width="190" height="54" rx="8"/><text class="tm" x="295" y="103">MainViewModel</text><text class="sm" x="295" y="121">select()</text>
+        <polyline class="ar" points="390,98 415,98 415,50 438,50" marker-end="url(#a3)"/>
+        <polyline class="ar" points="390,116 415,116 415,164 438,164" marker-end="url(#a3)"/>
+        <rect class="bx" x="440" y="22" width="210" height="56" rx="8"/><text class="tm" x="545" y="45">GuideRepository</text><text class="s" x="545" y="64">キャッシュになければ生成</text>
+        <rect class="bx" x="440" y="136" width="210" height="56" rx="8"/><text class="tm" x="545" y="159">SpotPhotos</text><text class="s" x="545" y="178">写真の手がかりがあるときだけ</text>
+        <line class="ar" x1="650" y1="50" x2="688" y2="50" marker-end="url(#a3)"/>
+        <line class="ar" x1="650" y1="164" x2="688" y2="164" marker-end="url(#a3)"/>
+        <rect class="bx-ext" x="690" y="22" width="130" height="56" rx="8"/><text class="te" x="755" y="45">AI サービス</text><text class="s" x="755" y="64">キー無しは定型文</text>
+        <rect class="bx-ext" x="690" y="136" width="130" height="56" rx="8"/><text class="te" x="755" y="159">Wikimedia</text><text class="s" x="755" y="178">既定は Wi-Fi 時のみ</text>
+        <polyline class="ar" points="820,50 845,50 845,98 858,98" marker-end="url(#a3)"/>
+        <polyline class="ar" points="820,164 845,164 845,116 858,116" marker-end="url(#a3)"/>
+        <rect class="bx-acc" x="860" y="80" width="120" height="54" rx="8"/><text class="t" x="920" y="103">解説パネル</text><text class="s" x="920" y="121">文・写真・読み上げ</text>
+      </svg>
+      </div>
+      <figcaption>読み上げは自動では始まらず、パネルのボタンで <code>Speaker</code> に渡します。散策モードで初訪問のスポットに近づいたときも同じ <code>GuideRepository.guideFor()</code> を使うので、キャッシュは両方で共有されます。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 4. Mood -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">図 4 · 雰囲気</div>
+      <h2>1 つの「雰囲気」を画面・音・話し方で共有する</h2>
+      <p><code>MoodSource</code> が 3 つの入力をまとめて現在の <code>Mood</code>（時間帯 × 季節 × 空模様 × 場所）を作り、4 か所がそれを読みます。</p>
+    </div>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 1000 250" role="img" aria-label="時計、周辺スポット、散策中の天気の 3 つが MoodSource に入り、Mood が配色、カードの絵、背景音、話しかけのトーンに使われる。">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <rect class="bx" x="20" y="24" width="230" height="52" rx="8"/><text class="t" x="135" y="46">時計</text><text class="s" x="135" y="64">1 分ごと → 時間帯・季節</text>
+        <rect class="bx" x="20" y="98" width="230" height="52" rx="8"/><text class="t" x="135" y="120">周辺スポット</text><text class="s" x="135" y="138">SpotRepository → 場所の種類</text>
+        <rect class="bx" x="20" y="172" width="230" height="52" rx="8"/><text class="t" x="135" y="194">天気（散策中のみ）</text><text class="s" x="135" y="212">CompanionFeed → 空模様</text>
+        <line class="ar" x1="250" y1="50" x2="378" y2="112" marker-end="url(#a4)"/>
+        <line class="ar" x1="250" y1="124" x2="378" y2="124" marker-end="url(#a4)"/>
+        <line class="ar" x1="250" y1="198" x2="378" y2="136" marker-end="url(#a4)"/>
+        <rect class="bx-acc" x="380" y="90" width="220" height="68" rx="10"/><text class="tm" x="490" y="116">MoodSource</text><text class="s" x="490" y="136">場所は 3 分続いたら切り替え</text>
+        <line class="ar" x1="600" y1="112" x2="718" y2="32" marker-end="url(#a4)"/>
+        <line class="ar" x1="600" y1="118" x2="718" y2="94" marker-end="url(#a4)"/>
+        <line class="ar" x1="600" y1="130" x2="718" y2="156" marker-end="url(#a4)"/>
+        <line class="ar" x1="600" y1="136" x2="718" y2="218" marker-end="url(#a4)"/>
+        <rect class="bx" x="720" y="10" width="260" height="44" rx="8"/><text class="t left" x="736" y="37">配色・書体</text><text class="sm" x="964" y="37" style="text-anchor:end">ui/MoodTheme</text>
+        <rect class="bx" x="720" y="72" width="260" height="44" rx="8"/><text class="t left" x="736" y="99">カード上部の絵</text><text class="sm" x="964" y="99" style="text-anchor:end">ui/MoodScene</text>
+        <rect class="bx" x="720" y="134" width="260" height="44" rx="8"/><text class="t left" x="736" y="161">背景音の選択</text><text class="sm" x="964" y="161" style="text-anchor:end">sound/Soundscape</text>
+        <rect class="bx" x="720" y="196" width="260" height="44" rx="8"/><text class="t left" x="736" y="223">話しかけのトーン</text><text class="sm" x="964" y="223" style="text-anchor:end">WalkCompanion</text>
+      </svg>
+      </div>
+      <figcaption>設定の「雰囲気に合わせる」をオフにすると、配色・絵・話し方は雰囲気を使わなくなります。背景音の選択だけは常に雰囲気を使います。</figcaption>
+    </figure>
+  </section>
+
+  <!-- package table -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">パッケージ一覧</div>
+      <h2>どこに何があるか</h2>
+      <p>パス は <code>app/src/main/java/com/example/sanpoguide/</code> からの相対です。行数は空行・コメントを含みます。</p>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>パッケージ</th><th>役割</th><th>主なファイル</th><th>行数</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">ui</td><td>Compose の 3 画面、地図、発言カード、雰囲気の配色と絵、ViewModel</td><td class="files">MainScreen, SettingsScreen, MoodScene, MainViewModel</td><td><div class="loc"><span class="bar" style="width:96px"></span>1,912</div></td></tr>
+          <tr><td class="pk">companion</td><td>散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定</td><td class="files">WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient</td><td><div class="loc"><span class="bar" style="width:31px"></span>612</div></td></tr>
+          <tr><td class="pk">data</td><td>Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真</td><td class="files">OverpassClient, SpotRepository, SpotPhotos</td><td><div class="loc"><span class="bar" style="width:26px"></span>515</div></td></tr>
+          <tr><td class="pk">sound</td><td>背景音の選択・その場での合成・再生</td><td class="files">Soundscape, Voices, AmbientPlayer</td><td><div class="loc"><span class="bar" style="width:22px"></span>436</div></td></tr>
+          <tr><td class="pk">walk</td><td>散策モードのフォアグラウンドサービス。いつ何を話すかを決める</td><td class="files">WalkService</td><td><div class="loc"><span class="bar" style="width:20px"></span>404</div></td></tr>
+          <tr><td class="pk">guide</td><td>AI サービスの抽象と実装、スポット解説とキャッシュ、TTS</td><td class="files">GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker</td><td><div class="loc"><span class="bar" style="width:17px"></span>342</div></td></tr>
+          <tr><td class="pk">settings</td><td>設定の保存、API キーの暗号化、話しかけの頻度、しきい値</td><td class="files">SettingsRepository, KeyCipher, TalkLevel, Threshold</td><td><div class="loc"><span class="bar" style="width:13px"></span>250</div></td></tr>
+          <tr><td class="pk">mood</td><td>雰囲気のモデル、場所の種類の推定、現在の雰囲気</td><td class="files">Mood, PlaceGuess, MoodSource</td><td><div class="loc"><span class="bar" style="width:9px"></span>186</div></td></tr>
+          <tr><td class="pk">history</td><td>散歩の記録（端末内 JSON、最新 500 件）と再訪の判定</td><td class="files">HistoryStore</td><td><div class="loc"><span class="bar" style="width:9px"></span>173</div></td></tr>
+          <tr><td class="pk">prompt</td><td>プロンプトファイルの読み込みと変数の埋め込み</td><td class="files">PromptTemplates, Prompts</td><td><div class="loc"><span class="bar" style="width:7px"></span>132</div></td></tr>
+          <tr><td class="pk">(root)</td><td>共有部品の生成、通知チャンネルの登録</td><td class="files">SanpoApp</td><td><div class="loc"><span class="bar" style="width:4px"></span>88</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- where to change -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">変更の入口</div>
+      <h2>こうしたいときはここを開く</h2>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>やりたいこと</th><th>最初に開くファイル</th></tr></thead>
+        <tbody>
+          <tr><td>話しかけ・解説の文面を変える</td><td><code>assets/prompts/</code>（一覧は <code>docs/prompts.md</code>）</td></tr>
+          <tr><td>話す条件や優先順位を変える</td><td><code>walk/WalkService.kt</code> の <code>maybeTalk()</code></td></tr>
+          <tr><td>距離・時間・気温などの既定値を変える</td><td><code>settings/Threshold.kt</code></td></tr>
+          <tr><td>話しかけの頻度の段階を変える</td><td><code>settings/TalkLevel.kt</code></td></tr>
+          <tr><td>施設案内の条件を変える</td><td><code>companion/FacilityAdvisor.kt</code></td></tr>
+          <tr><td>AI サービスを追加する</td><td>OpenAI 互換なら <code>guide/Provider.kt</code> に 1 行。独自 API なら <code>LlmClient</code> を実装して <code>GuideRepository.createClient</code> に分岐を足す</td></tr>
+          <tr><td>検索するスポットの種類を変える</td><td><code>data/OverpassClient.kt</code></td></tr>
+          <tr><td>配色・絵・背景音の選び方を変える</td><td><code>ui/MoodTheme.kt</code>・<code>ui/MoodScene.kt</code>・<code>sound/Soundscape.kt</code></td></tr>
+          <tr><td>記録の保存形式や再訪の判定を変える</td><td><code>history/HistoryStore.kt</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="plan">
+    <h3>計画中：位置に紐づく秘密メッセージ</h3>
+    <p>アプリの外にメッセージサーバーを置く予定です。API の契約（<code>docs/secret-messages-api.md</code>）と OpenAPI（<code>docs/api/sanpo-messages.openapi.yaml</code>）はできていますが、アプリ側・サーバー側ともまだ実装されていないため、上の図には入れていません。進み具合は <code>docs/TODO.md</code> にあります。</p>
+  </div>
+</main>
+</body>
+</html>
