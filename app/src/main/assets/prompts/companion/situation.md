@@ -5,6 +5,8 @@
     time_of_day   朝・昼・夕方・夜・深夜
     season        春・夏・秋・冬
     weather       いまの天気（例: 霧雨、気温19℃）。取得できない／再訪の一言では null
+    mood          いまの雰囲気。設定で雰囲気をオフにしている／再訪の一言では null
+      summary       季節・時間帯・空模様・場所をまとめたもの（例: 秋の夕方、雨、寺社の近く）
     walk          今回の散歩（散歩の終了時は null）
       minutes       開始からの分数
       km            歩いた距離（km）
@@ -26,6 +28,9 @@
 {{#weather}}
 - 天気: {{weather}}
 {{/weather}}
+{{#mood}}
+- 雰囲気: {{summary}}
+{{/mood}}
 {{#walk}}
 - 今回の散歩: 開始から{{minutes}}分、{{km}}km
 {{#spots}}

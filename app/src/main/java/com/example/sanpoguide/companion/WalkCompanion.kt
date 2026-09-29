@@ -6,6 +6,9 @@ import com.example.sanpoguide.guide.GuideRepository
 import com.example.sanpoguide.history.HistoryStore
 import com.example.sanpoguide.history.SpotVisit
 import com.example.sanpoguide.history.WalkRecord
+import com.example.sanpoguide.mood.Mood
+import com.example.sanpoguide.mood.Season
+import com.example.sanpoguide.mood.TimeOfDay
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
 import java.util.Calendar
@@ -36,6 +39,8 @@ class WalkCompanion(
     private val guides: GuideRepository,
     private val history: HistoryStore,
     private val prompts: PromptTemplates,
+    /** The current mood for the companion's tone, or null when the user has turned moods off. */
+    private val mood: () -> Mood? = { null },
 ) {
     suspend fun say(event: TalkEvent, session: WalkSession?, weather: Weather?): String {
         val kind = kindOf(event)
@@ -76,8 +81,10 @@ class WalkCompanion(
 
         return mapOf(
             "now" to formatDateTime(now),
-            "time_of_day" to timeOfDay(now),
-            "season" to season(now),
+            "time_of_day" to TimeOfDay.of(now).label,
+            "season" to Season.of(now).label,
+            // Spot lines should be about the spot, like the weather below.
+            "mood" to mood()?.takeIf { event !is TalkEvent.Revisit }?.let { mapOf("summary" to it.summary) },
             // Spot lines should be about the spot; given the weather, models mention it every time.
             "weather" to weather?.takeIf { event !is TalkEvent.Revisit }?.toString(),
             "walk" to session?.let { s ->
@@ -139,6 +146,7 @@ class WalkCompanion(
                 "distance_m" to ((a.distanceM + 5) / 10 * 10).coerceAtLeast(10),
                 "direction" to event.direction,
                 "need_shelter" to (a.need == FacilityNeed.SHELTER),
+                "rain_coming" to a.forecast,
                 "need_toilet" to (a.need == FacilityNeed.TOILET),
                 "need_drink" to (a.need == FacilityNeed.DRINK),
                 "need_seat" to (a.need == FacilityNeed.SEAT),
@@ -191,21 +199,6 @@ class WalkCompanion(
                 c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH), week,
                 c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE),
             )
-        }
-
-        private fun timeOfDay(c: Calendar) = when (c.get(Calendar.HOUR_OF_DAY)) {
-            in 4..9 -> "朝"
-            in 10..15 -> "昼"
-            in 16..18 -> "夕方"
-            in 19..22 -> "夜"
-            else -> "深夜"
-        }
-
-        private fun season(c: Calendar) = when (c.get(Calendar.MONTH) + 1) {
-            in 3..5 -> "春"
-            in 6..8 -> "夏"
-            in 9..11 -> "秋"
-            else -> "冬"
         }
 
         private fun greeting(c: Calendar) = when (c.get(Calendar.HOUR_OF_DAY)) {

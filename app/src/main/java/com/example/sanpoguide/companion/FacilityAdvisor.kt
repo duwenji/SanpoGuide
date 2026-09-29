@@ -28,7 +28,8 @@ enum class FacilityNeed(
     SEAT(setOf(FacilityKind.BENCH, FacilityKind.SHELTER), Threshold.SEAT_RADIUS_M, Threshold.SEAT_REPEAT_MIN, Threshold.SEAT_AFTER_MIN),
 }
 
-data class FacilityAdvice(val facility: Facility, val need: FacilityNeed, val distanceM: Int)
+/** [forecast]: a shelter picked because rain or snow is on the way, not falling yet. */
+data class FacilityAdvice(val facility: Facility, val need: FacilityNeed, val distanceM: Int, val forecast: Boolean = false)
 
 /** Decides whether a nearby facility should be mentioned now. Pure logic, no Android calls. */
 object FacilityAdvisor {
@@ -47,21 +48,23 @@ object FacilityAdvisor {
         limits: Thresholds = Thresholds(),
     ): FacilityAdvice? {
         for (need in FacilityNeed.entries) {
-            if (!applies(need, elapsedMs, weather, limits)) continue
+            if (!applies(need, elapsedMs, weather, now, limits)) continue
             val last = lastMentionAt[need]
             if (last != null && now - last < limits.ms(need.repeat)) continue
             val (facility, distance) = nearby
                 .filter { (f, d) -> f.kind in need.kinds && d <= limits[need.radius] && f.id !in mentioned }
                 .minByOrNull { it.second } ?: continue
-            return FacilityAdvice(facility, need, distance.toInt())
+            val forecast = need == FacilityNeed.SHELTER && weather?.isWet != true
+            return FacilityAdvice(facility, need, distance.toInt(), forecast)
         }
         return null
     }
 
-    private fun applies(need: FacilityNeed, elapsedMs: Long, weather: Weather?, limits: Thresholds): Boolean {
+    private fun applies(need: FacilityNeed, elapsedMs: Long, weather: Weather?, now: Long, limits: Thresholds): Boolean {
         if (need.after != null && elapsedMs < limits.ms(need.after)) return false
         return when (need) {
-            FacilityNeed.SHELTER -> weather?.isWet == true
+            // Also ahead of rain, while there's still time to reach a roof.
+            FacilityNeed.SHELTER -> weather != null && (weather.isWet || WeatherChangeDetector.detect(weather, now, limits) != null)
             FacilityNeed.DRINK -> (weather?.temperatureC ?: Double.NEGATIVE_INFINITY) >= limits[Threshold.DRINK_HOT_C]
             FacilityNeed.TOILET, FacilityNeed.SEAT -> true
         }

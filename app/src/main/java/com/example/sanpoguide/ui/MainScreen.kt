@@ -3,6 +3,7 @@ package com.example.sanpoguide.ui
 import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
@@ -56,9 +59,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.filled.History
@@ -85,6 +92,7 @@ fun MainScreen(
     val facilities by viewModel.facilities.collectAsStateWithLifecycle()
     val nearestFacilities by viewModel.nearestFacilities.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
+    val mood by viewModel.mood.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -125,7 +133,8 @@ fun MainScreen(
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (walking || lines.isNotEmpty()) {
-                CompanionCard(liveWalk, lines)
+                // The scene is part of walk mode, not something to look at while walking.
+                CompanionCard(liveWalk, lines, scene = mood.takeIf { settings.moodEnabled && walking })
             }
             if (!settings.isConfigured) {
                 Banner("AIのAPIキーが未設定のため、簡易解説で動作しています。タップして設定", onOpenSettings)
@@ -211,6 +220,7 @@ private fun GuideSheet(spot: SelectedSpot, onSpeak: (String) -> Unit, onStop: ()
         Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        SpotPhotoView(spot.photo)
         Text(poi.name, style = MaterialTheme.typography.headlineSmall)
         Text(
             listOfNotNull(poi.category, spot.item.distanceM?.let { formatDistance(poi, it) }).joinToString(" ・ "),
@@ -241,6 +251,38 @@ private fun GuideSheet(spot: SelectedSpot, onSpeak: (String) -> Unit, onStop: ()
     }
 }
 
+/** The spot's photo with its credit line (the license requires it); nothing when there's none. */
+@Composable
+private fun SpotPhotoView(state: PhotoState) {
+    when (state) {
+        PhotoState.None -> Unit
+        PhotoState.Loading -> Text(
+            "写真を読み込んでいます…", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp),
+        )
+        PhotoState.WaitingForWifi -> Text(
+            "写真は Wi-Fi 接続時に表示します（設定で変更できます）", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp),
+        )
+        is PhotoState.Ready -> {
+            val photo = state.photo
+            val uriHandler = LocalUriHandler.current
+            Image(
+                photo.bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)),
+            )
+            Text(
+                listOfNotNull("写真: ${photo.author ?: "作者不明"}", photo.license, "Wikimedia Commons").joinToString(" / "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().clickable { uriHandler.openUri(photo.pageUrl) }.padding(top = 4.dp, bottom = 12.dp),
+            )
+        }
+    }
+}
+
 /** The nearest facility of each kind; tapping one pans the map to it. */
 @Composable
 private fun FacilityBar(items: List<FacilityItem>, onClick: (FacilityItem) -> Unit) {
@@ -255,8 +297,7 @@ private fun FacilityBar(items: List<FacilityItem>, onClick: (FacilityItem) -> Un
                 label = { Text(listOfNotNull(kind.label, item.distanceM?.let(::formatMeters)).joinToString(" ")) },
                 leadingIcon = {
                     // The map marker's dot, so the chips also serve as the map legend.
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(painterResource(facilityDot(kind)), contentDescription = null, Modifier.size(20.dp))
+                    Box(Modifier.size(20.dp).background(facilityColor(kind), CircleShape), contentAlignment = Alignment.Center) {
                         Icon(facilityIcon(kind), contentDescription = null, Modifier.size(12.dp), tint = Color.White)
                     }
                 },

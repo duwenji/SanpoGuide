@@ -48,6 +48,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setModel(model: String) = edit { it.copy(models = it.models + (it.provider to model)) }
     fun setCustomBaseUrl(url: String) = edit { it.copy(customBaseUrl = url) }
     fun setTalkLevel(level: TalkLevel) = edit { it.copy(talkLevel = level) }
+    fun setMoodEnabled(on: Boolean) = edit { it.copy(moodEnabled = on) }
+    fun setAmbientEnabled(on: Boolean) = edit { it.copy(ambientEnabled = on) }
+    fun setAmbientVolume(percent: Int) = edit { it.copy(ambientVolume = percent) }
+    fun setAmbientEarphonesOnly(on: Boolean) = edit { it.copy(ambientEarphonesOnly = on) }
+    fun setSpotPhotos(on: Boolean) = edit { it.copy(spotPhotos = on) }
+    fun setPhotosOnMobileData(on: Boolean) = edit { it.copy(photosOnMobileData = on) }
 
     /** [value] null (blank or not a number) is kept as invalid, so the field shows an error. */
     fun setThreshold(t: Threshold, value: Int?) = edit { it.copy(thresholds = it.thresholds.with(t, value ?: INVALID)) }

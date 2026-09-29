@@ -11,15 +11,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.sanpoguide.walk.WalkService
 
 class MainActivity : ComponentActivity() {
@@ -51,14 +48,9 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val dark = isSystemInDarkTheme()
-            MaterialTheme(
-                colorScheme = if (dark) {
-                    darkColorScheme(primary = Color(0xFF81C784), secondary = Color(0xFFA5D6A7))
-                } else {
-                    lightColorScheme(primary = Color(0xFF2E7D32), secondary = Color(0xFF558B2F))
-                }
-            ) {
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
+            val mood by viewModel.mood.collectAsStateWithLifecycle()
+            MoodTheme(mood.takeIf { settings.moodEnabled }, systemDark = isSystemInDarkTheme()) {
                 var screen by rememberSaveable { mutableStateOf(Screen.MAIN) }
                 if (screen != Screen.MAIN) BackHandler { screen = Screen.MAIN }
                 when (screen) {

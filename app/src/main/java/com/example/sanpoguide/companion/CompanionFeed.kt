@@ -20,6 +20,10 @@ class CompanionFeed {
     /** Newest first. */
     val lines: StateFlow<List<Utterance>> = _lines.asStateFlow()
 
+    private val _weather = MutableStateFlow<Weather?>(null)
+    /** The latest weather while walking (fetched every 15 minutes); null outside walk mode. */
+    val weather: StateFlow<Weather?> = _weather.asStateFlow()
+
     private val _talkedAbout = MutableStateFlow<Set<String>>(emptySet())
     /** Spot ids talked about during the current walk. */
     val talkedAbout: StateFlow<Set<String>> = _talkedAbout.asStateFlow()
@@ -37,6 +41,11 @@ class CompanionFeed {
 
     fun endWalk() {
         _live.value = null
+        _weather.value = null
+    }
+
+    fun updateWeather(weather: Weather?) {
+        _weather.value = weather
     }
 
     fun add(line: Utterance) = _lines.update { (listOf(line) + it).take(MAX_LINES) }

@@ -4,7 +4,12 @@
 }}
 {{#direction}}{{direction}}{{/direction}}{{distance_m}}mほどのところに{{label}}があります。
 {{#need_shelter}}
+{{^rain_coming}}
 雨宿りにどうぞ。
+{{/rain_coming}}
+{{#rain_coming}}
+降ってきたら、ここで雨宿りできますよ。
+{{/rain_coming}}
 {{/need_shelter}}
 {{#need_drink}}
 水分補給もお忘れなく。

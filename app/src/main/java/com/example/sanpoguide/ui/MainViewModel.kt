@@ -11,6 +11,8 @@ import com.example.sanpoguide.companion.Utterance
 import com.example.sanpoguide.data.Facility
 import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
+import com.example.sanpoguide.data.SpotPhoto
+import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.walk.WalkService
 import com.google.android.gms.location.LocationServices
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -37,7 +40,16 @@ sealed interface GuideState {
     data class Failed(val message: String) : GuideState
 }
 
-data class SelectedSpot(val item: SpotItem, val guide: GuideState)
+sealed interface PhotoState {
+    /** No photo for this spot, or photos are turned off. */
+    data object None : PhotoState
+    data object Loading : PhotoState
+    /** There is one, but the user only downloads photos on Wi-Fi. */
+    data object WaitingForWifi : PhotoState
+    data class Ready(val photo: SpotPhoto) : PhotoState
+}
+
+data class SelectedSpot(val item: SpotItem, val guide: GuideState, val photo: PhotoState = PhotoState.None)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as SanpoApp
@@ -45,6 +57,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val location: StateFlow<Location?> = app.spots.location
     val walking: StateFlow<Boolean> = WalkService.walking
     val settings: StateFlow<GuideSettings> = app.settings.settings
+
+    val mood: StateFlow<Mood> = app.mood.mood
 
     val liveWalk: StateFlow<LiveWalk?> = app.feed.live
     val companionLines: StateFlow<List<Utterance>> = app.feed.lines
@@ -114,19 +128,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun select(item: SpotItem) {
-        _selected.value = SelectedSpot(item, GuideState.Loading)
+        val photo = initialPhotoState(item.poi)
+        _selected.value = SelectedSpot(item, GuideState.Loading, photo)
         viewModelScope.launch {
             val state = try {
                 GuideState.Ready(app.guides.guideFor(item.poi, item.distanceM))
             } catch (e: Exception) {
                 GuideState.Failed("解説の生成に失敗しました: ${e.message}")
             }
-            // Ignore the result if the user has already moved on to another spot.
-            if (_selected.value?.item?.poi?.id == item.poi.id) {
-                _selected.value = SelectedSpot(item, state)
+            updateSelected(item) { it.copy(guide = state) }
+        }
+        if (photo == PhotoState.Loading) {
+            viewModelScope.launch {
+                val found = app.photos.photoFor(item.poi)
+                updateSelected(item) { it.copy(photo = found?.let(PhotoState::Ready) ?: PhotoState.None) }
             }
         }
     }
+
+    private fun initialPhotoState(poi: Poi): PhotoState {
+        val s = settings.value
+        return when {
+            !s.spotPhotos || !app.photos.hasPhotoHint(poi) -> PhotoState.None
+            app.photos.isMetered() && !s.photosOnMobileData -> PhotoState.WaitingForWifi
+            else -> PhotoState.Loading
+        }
+    }
+
+    /** Ignores results for a spot the user has already moved on from. */
+    private fun updateSelected(item: SpotItem, change: (SelectedSpot) -> SelectedSpot) =
+        _selected.update { current -> if (current?.item?.poi?.id == item.poi.id) change(current) else current }
 
     fun dismiss() {
         _selected.value = null

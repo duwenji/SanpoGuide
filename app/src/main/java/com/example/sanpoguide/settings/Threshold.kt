@@ -47,4 +47,11 @@ data class Thresholds(val values: Map<Threshold, Int> = emptyMap()) {
     fun ms(t: Threshold): Long = get(t) * 60_000L
 
     fun with(t: Threshold, value: Int) = copy(values = values + (t to value))
+
+    /** Combinations under which a remark can never be made, as messages for the settings screen. */
+    fun conflicts(): List<String> = buildList {
+        if (get(Threshold.SUNSET_LATEST_MIN) > get(Threshold.SUNSET_NOTICE_MIN)) {
+            add("日の入り: 「何分前を過ぎたら知らせないか」を「何分前から知らせるか」以下にしてください（今のままでは知らせません）")
+        }
+    }
 }

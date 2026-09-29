@@ -7,10 +7,12 @@ import com.example.sanpoguide.companion.WalkCompanion
 import com.example.sanpoguide.companion.CompanionFeed
 import com.example.sanpoguide.companion.WeatherClient
 import com.example.sanpoguide.data.OverpassClient
+import com.example.sanpoguide.data.SpotPhotos
 import com.example.sanpoguide.data.SpotRepository
 import com.example.sanpoguide.guide.GuideRepository
 import com.example.sanpoguide.guide.Speaker
 import com.example.sanpoguide.history.HistoryStore
+import com.example.sanpoguide.mood.MoodSource
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.SettingsRepository
@@ -38,6 +40,10 @@ class SanpoApp : Application() {
         private set
     lateinit var companion: WalkCompanion
         private set
+    lateinit var mood: MoodSource
+        private set
+    lateinit var photos: SpotPhotos
+        private set
     val weather = WeatherClient()
     val feed = CompanionFeed()
 
@@ -50,8 +56,12 @@ class SanpoApp : Application() {
         prompts = Prompts.fromAssets(assets)
         guides = GuideRepository(settings, prompts)
         speaker = Speaker(this)
+        photos = SpotPhotos(this)
         history = HistoryStore(this)
-        companion = WalkCompanion(guides, history, prompts)
+        mood = MoodSource(spots, feed.weather, appScope)
+        companion = WalkCompanion(guides, history, prompts) {
+            mood.mood.value.takeIf { settings.settings.value.moodEnabled }
+        }
         appScope.launch { history.load() }
 
         getSystemService(NotificationManager::class.java).apply {
@@ -61,11 +71,18 @@ class SanpoApp : Application() {
             createNotificationChannel(
                 NotificationChannel(CHANNEL_SPOT, "スポット案内", NotificationManager.IMPORTANCE_HIGH)
             )
+            // High importance keeps the default sound and vibration.
+            createNotificationChannel(
+                NotificationChannel(CHANNEL_ALERT, "雷雨の予報", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "散策中に雷雨が近づいたとき、音で知らせます"
+                }
+            )
         }
     }
 
     companion object {
         const val CHANNEL_WALK = "walk"
         const val CHANNEL_SPOT = "spot"
+        const val CHANNEL_ALERT = "weather_alert"
     }
 }

@@ -879,6 +879,7 @@ sequenceDiagram
 ## 関連ドキュメント・参照リンク
 
 - [api/sanpo-messages.openapi.yaml](api/sanpo-messages.openapi.yaml): 本書を機械で読める形にした OpenAPI 3.1（本書が正本）。各操作の `x-sanpo-feature`・`x-sanpo-release` で必要な機能と版を示す
+- [api/README.md](api/README.md): OpenAPI の見方・使い方と、利用の流れのシーケンス図
 - [TODO.md「位置に紐づく秘密メッセージ」](TODO.md#位置に紐づく秘密メッセージ)
 - [TODO.md「第三者の媒体・広告の再生」](TODO.md#第三者の媒体広告の再生)
 - RFC 9180（HPKE）、RFC 8032（Ed25519）、RFC 9457（Problem Details）、RFC 8615（Well-Known URI）

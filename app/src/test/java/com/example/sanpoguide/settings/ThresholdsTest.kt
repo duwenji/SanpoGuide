@@ -24,4 +24,17 @@ class ThresholdsTest {
     fun `every default is within its range`() {
         Threshold.entries.forEach { assertTrue(it.name, it.isValid(it.default)) }
     }
+
+    @Test
+    fun `defaults have no conflicts`() {
+        assertEquals(emptyList<String>(), Thresholds().conflicts())
+    }
+
+    @Test
+    fun `a sunset window that ends before it starts is a conflict`() {
+        val crossed = Thresholds().with(Threshold.SUNSET_NOTICE_MIN, 10).with(Threshold.SUNSET_LATEST_MIN, 20)
+        assertEquals(1, crossed.conflicts().size)
+        val oneMinute = Thresholds().with(Threshold.SUNSET_NOTICE_MIN, 10).with(Threshold.SUNSET_LATEST_MIN, 10)
+        assertEquals(emptyList<String>(), oneMinute.conflicts())
+    }
 }

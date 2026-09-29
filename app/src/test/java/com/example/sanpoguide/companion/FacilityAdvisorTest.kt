@@ -59,6 +59,19 @@ class FacilityAdvisorTest {
     }
 
     @Test
+    fun `shelter also when rain is forecast, flagged as a forecast`() {
+        val slot = ForecastSlot(now + 30 * minute, 61, 0.5)
+        val rainSoon = Weather("くもり", 18.0, 0.0, code = 3, forecast = listOf(slot))
+        val advice = pick(listOf(shelter to 100f), elapsedMin = 0, weather = rainSoon)!!
+        assertEquals(FacilityNeed.SHELTER, advice.need)
+        assertEquals(true, advice.forecast)
+        assertEquals(false, pick(listOf(shelter to 100f), elapsedMin = 0, weather = rain)!!.forecast)
+        // Rain beyond the lookahead doesn't count yet.
+        val later = rainSoon.copy(forecast = listOf(slot.copy(at = now + 3 * 60 * minute)))
+        assertNull(pick(listOf(shelter to 100f), elapsedMin = 0, weather = later))
+    }
+
+    @Test
     fun `each facility once, and each need spaced out`() {
         assertNull(pick(listOf(toilet to 20f), elapsedMin = 30, mentioned = setOf("t")))
         val other = facility("t2", FacilityKind.TOILETS)

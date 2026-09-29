@@ -6,6 +6,7 @@
     distance_m     施設までの距離（10m 単位）
     direction      歩いている向きから見た方向（前方・右手・左手・後ろ）。立ち止まっているときは null
     need_shelter   雨・雪で、屋根のある休憩所を案内するとき true
+    rain_coming    need_shelter のうち、まだ降っておらず、1時間以内に降る予報のとき true
     need_toilet    しばらく歩いたので、トイレを案内するとき true
     need_drink     暑いので、水分補給の場所を案内するとき true
     need_seat      長く歩いたので、座れる場所を案内するとき true
@@ -13,7 +14,12 @@
 # 出来事
 {{#direction}}{{direction}}{{/direction}}{{distance_m}}mほどのところに{{label}}{{#name}}（{{name}}）{{/name}}があります。
 {{#need_shelter}}
+{{^rain_coming}}
 雨や雪が降っているので、雨宿りできる場所として伝えてください。
+{{/rain_coming}}
+{{#rain_coming}}
+まだ降っていませんが、このあと雨や雪になる予報なので、降ってきたときに雨宿りできる場所として伝えてください。
+{{/rain_coming}}
 {{/need_shelter}}
 {{#need_toilet}}
 しばらく歩いているので、念のためトイレの場所として伝えてください。行くよう勧めたり、体調を詮索したりしないでください。

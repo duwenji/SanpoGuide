@@ -1,5 +1,6 @@
 package com.example.sanpoguide.data
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -17,6 +18,9 @@ data class NearbyResult(val spots: List<Poi>, val facilities: List<Facility>)
 class OverpassClient(
     private val http: OkHttpClient = OkHttpClient.Builder()
         .callTimeout(40, TimeUnit.SECONDS)
+        // The server may think for up to the query's [timeout:25] before sending anything;
+        // OkHttp's default 10-second read timeout gave up on answers that were on their way.
+        .readTimeout(30, TimeUnit.SECONDS)
         .build(),
 ) {
     suspend fun search(lat: Double, lon: Double, radiusM: Int = 600): NearbyResult =
@@ -34,7 +38,7 @@ class OverpassClient(
                   nwr($around)["name"]["tourism"~"^(attraction|museum|viewpoint|artwork|gallery)$"];
                   nwr($around)["name"]["amenity"="place_of_worship"];
                   nwr($around)["name"]["leisure"~"^(park|garden)$"];
-                  nwr($around)["name"]["natural"~"^(tree|peak|spring|water)$"];
+                  nwr($around)["name"]["natural"~"^(tree|peak|spring|water|beach)$"];
                 );
                 out tags geom 80;
                 nwr($around)["amenity"="toilets"]$open;
@@ -52,6 +56,8 @@ class OverpassClient(
             // Public Overpass servers are often busy (429/504); fall through to the next mirror.
             var lastError: IOException? = null
             for (endpoint in ENDPOINTS) {
+                // Logged to measure how long searches take and how often a server gives up.
+                val startedAt = System.currentTimeMillis()
                 val request = Request.Builder()
                     .url(endpoint)
                     .header("User-Agent", "SanpoGuide/0.1 (Android)")
@@ -59,11 +65,17 @@ class OverpassClient(
                     .build()
                 try {
                     http.newCall(request).execute().use { res ->
-                        if (res.isSuccessful) return@withContext parse(res.body!!.string())
+                        if (res.isSuccessful) {
+                            val body = res.body!!.string()
+                            Log.i(TAG, "OK ${elapsed(startedAt)}ms ${body.length}B $endpoint")
+                            return@withContext parse(body)
+                        }
                         lastError = IOException("Overpass API error: HTTP ${res.code}")
+                        Log.w(TAG, "HTTP ${res.code} after ${elapsed(startedAt)}ms $endpoint")
                     }
                 } catch (e: IOException) {
                     lastError = e
+                    Log.w(TAG, "${e.javaClass.simpleName} after ${elapsed(startedAt)}ms $endpoint")
                 }
             }
             throw lastError!!
@@ -109,9 +121,12 @@ class OverpassClient(
     /** Nodes carry their position; ways and relations get a `center` from `out center`. */
     private fun facilityOf(e: JSONObject, kind: FacilityKind, tags: Map<String, String>): Facility? {
         val point = if (e.has("lat")) e else e.optJSONObject("center") ?: return null
+        val name = tags["name:ja"] ?: tags["name"]
         return Facility(
             "${e.getString("type")}/${e.getLong("id")}", kind,
-            point.getDouble("lat"), point.getDouble("lon"), tags["name:ja"] ?: tags["name"],
+            point.getDouble("lat"), point.getDouble("lon"),
+            // Bus stop roofs keep the rain off but aren't rest houses; say what they are.
+            if (kind == FacilityKind.SHELTER && tags["shelter_type"] == "public_transport") name ?: "バス停" else name,
         )
     }
 
@@ -159,11 +174,16 @@ class OverpassClient(
         tags["tourism"] == "attraction" -> "名所"
         tags["leisure"] == "park" -> "公園"
         tags["leisure"] == "garden" -> "庭園"
+        tags["natural"] == "beach" -> "海辺"
+        tags["natural"] == "water" -> "水辺"
         tags.containsKey("natural") -> "自然"
         else -> "スポット"
     }
 
+    private fun elapsed(since: Long) = System.currentTimeMillis() - since
+
     companion object {
+        private const val TAG = "Overpass"
         private const val CLOSE_RADIUS_M = 250
         private const val SAME_FACILITY_M = 20f
         private val ENDPOINTS = listOf(

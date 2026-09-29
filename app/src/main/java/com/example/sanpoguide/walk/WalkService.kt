@@ -28,6 +28,8 @@ import com.example.sanpoguide.data.Poi
 import com.example.sanpoguide.history.SpotVisit
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.Threshold
+import com.example.sanpoguide.sound.AmbientPlayer
+import com.example.sanpoguide.sound.Soundscape
 import com.example.sanpoguide.ui.MainActivity
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -38,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -56,6 +59,7 @@ class WalkService : LifecycleService() {
     private var weather: Weather? = null
     private var weatherFetchedAt = 0L
     private var greeted = false
+    private var ambient: AmbientPlayer? = null
 
     /** One line at a time; events that arrive while the companion is talking wait for the next tick. */
     private val talking = Mutex()
@@ -82,6 +86,7 @@ class WalkService : LifecycleService() {
             app.feed.startWalk(s)
             startLocationUpdates()
             startTicker()
+            startAmbient()
             _walking.value = true
         }
         return START_STICKY
@@ -89,6 +94,8 @@ class WalkService : LifecycleService() {
 
     override fun onDestroy() {
         fused.removeLocationUpdates(callback)
+        ambient?.release()
+        ambient = null
         session?.let(::finishWalk)
         session = null
         _walking.value = false
@@ -109,6 +116,21 @@ class WalkService : LifecycleService() {
             delay(TICK_MS)
             lastLocation?.let { refreshWeather(it) }
             maybeTalk()
+        }
+    }
+
+    /** Background sound follows the mood and the settings; the player is made on first use. */
+    private fun startAmbient() = lifecycleScope.launch {
+        combine(app.settings.settings, app.mood.mood, ::Pair).collect { (settings, mood) ->
+            val player = ambient ?: if (settings.ambientEnabled) {
+                AmbientPlayer(this@WalkService, app.speaker.speaking).also { ambient = it }
+            } else {
+                return@collect
+            }
+            player.set(
+                Soundscape.forMood(mood).takeIf { settings.ambientEnabled },
+                settings.ambientVolume, settings.ambientEarphonesOnly,
+            )
         }
     }
 
@@ -149,7 +171,12 @@ class WalkService : LifecycleService() {
             talk {
                 // A thunderstorm warning also covers the rain that comes with it.
                 WeatherChangeKind.entries.filter { it >= change.kind }.forEach { s.weatherWarnedAt[it] = now }
-                speakLine(app.companion.say(TalkEvent.WeatherTurn(change), s, weather))
+                val line = app.companion.say(TalkEvent.WeatherTurn(change), s, weather)
+                // Without earphones the spoken warning goes unheard; lightning is worth a sound.
+                if (change.kind == WeatherChangeKind.THUNDER) {
+                    getSystemService(NotificationManager::class.java).notify(ALERT_NOTIFICATION_ID, alertNotification(line))
+                }
+                speakLine(line)
             }
             return
         }
@@ -281,6 +308,7 @@ class WalkService : LifecycleService() {
             Log.w(TAG, "Weather fetch failed", e)
             weather
         }
+        if (session != null) app.feed.updateWeather(weather)
     }
 
     /** Saves the walk so far, in the app scope so a stopping service doesn't cut the write short. */
@@ -334,11 +362,23 @@ class WalkService : LifecycleService() {
             .setAutoCancel(true)
             .build()
 
+    private fun alertNotification(text: String): Notification =
+        NotificationCompat.Builder(this, SanpoApp.CHANNEL_ALERT)
+            .setSmallIcon(R.drawable.ic_walk)
+            .setContentTitle("雷雨の予報")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setContentIntent(openAppIntent())
+            .setAutoCancel(true)
+            .build()
+
     companion object {
         private const val TAG = "WalkService"
         private const val NOTIFICATION_ID = 1
         // One slot for spot talks: each new spot replaces the last instead of piling up.
         private const val SPOT_NOTIFICATION_ID = 2
+        private const val ALERT_NOTIFICATION_ID = 3
         private const val ACTION_STOP = "stop"
         private const val TICK_MS = 30_000L
         // Often enough that the lookahead for weather changes stays current.

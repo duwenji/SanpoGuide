@@ -17,6 +17,7 @@ data class ForecastSlot(val at: Long, val code: Int, val precipitationMm: Double
 data class Weather(
     val description: String,
     val temperatureC: Double,
+    /** The last 15 minutes' amount (Open-Meteo's "current" interval), not per hour. */
     val precipitationMm: Double,
     /** Today's sunset at the location (epoch ms), or null if unknown. Not part of [toString]. */
     val sunsetAt: Long? = null,
@@ -28,9 +29,12 @@ data class Weather(
     /** Rain, drizzle, snow or a thunderstorm. */
     val isWet: Boolean get() = precipitationMm > 0 || code?.let(WeatherCodes::isWet) ?: WET_WORDS.any { it in description }
 
+    /** [precipitationMm] as an hourly rate, the unit people know from forecasts. */
+    val precipitationMmPerHour: Double get() = precipitationMm * 4
+
     override fun toString() =
         "$description、気温${"%.0f".format(Locale.ROOT, temperatureC)}℃" +
-            if (precipitationMm > 0) "、降水量${precipitationMm}mm/h" else ""
+            if (precipitationMm > 0) "、降水量は1時間あたり${"%.1f".format(Locale.ROOT, precipitationMmPerHour)}mm" else ""
 
     private companion object {
         // For weather without a code; "霧雨" and "雷雨" contain "雨".
