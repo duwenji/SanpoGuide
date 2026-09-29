@@ -6,6 +6,7 @@ info:
   description: |
     [secret-messages-api.md](../secret-messages-api.md)（API-001 1.0）を機械で読める形にしたもの。
     文言・判断の根拠は契約書が正本で、食い違いがあれば契約書に合わせてこのファイルを直す。
+    使い方とシーケンス図は [README.md](README.md) を参照。
 
     - サーバーの実装方法と置き場所は問わない。このファイルと契約書の「サーバーの準拠要件」を満たせばよい
     - 各操作の `x-sanpo-feature` は、その操作を実装するのに必要な機能（検出 API の `features`）。
