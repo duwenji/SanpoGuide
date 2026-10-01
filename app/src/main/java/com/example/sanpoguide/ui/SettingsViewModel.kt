@@ -54,6 +54,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setAmbientEarphonesOnly(on: Boolean) = edit { it.copy(ambientEarphonesOnly = on) }
     fun setSpotPhotos(on: Boolean) = edit { it.copy(spotPhotos = on) }
     fun setPhotosOnMobileData(on: Boolean) = edit { it.copy(photosOnMobileData = on) }
+    fun setShareLocationWithAi(on: Boolean) = edit { it.copy(shareLocationWithAi = on) }
 
     /** [value] null (blank or not a number) is kept as invalid, so the field shows an error. */
     fun setThreshold(t: Threshold, value: Int?) = edit { it.copy(thresholds = it.thresholds.with(t, value ?: INVALID)) }

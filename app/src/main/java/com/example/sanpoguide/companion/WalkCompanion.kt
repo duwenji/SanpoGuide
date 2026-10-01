@@ -2,6 +2,7 @@ package com.example.sanpoguide.companion
 
 import android.util.Log
 import com.example.sanpoguide.data.Poi
+import com.example.sanpoguide.guide.GuidePrompt
 import com.example.sanpoguide.guide.GuideRepository
 import com.example.sanpoguide.history.HistoryStore
 import com.example.sanpoguide.history.SpotVisit
@@ -41,6 +42,8 @@ class WalkCompanion(
     private val prompts: PromptTemplates,
     /** The current mood for the companion's tone, or null when the user has turned moods off. */
     private val mood: () -> Mood? = { null },
+    /** Whether the user allows coordinates to go to the AI (off by default). */
+    private val shareLocation: () -> Boolean = { false },
 ) {
     suspend fun say(event: TalkEvent, session: WalkSession?, weather: Weather?): String {
         val kind = kindOf(event)
@@ -107,6 +110,15 @@ class WalkCompanion(
                 )
             },
             "recent" to session?.recentLines?.toList()?.takeIf { it.isNotEmpty() }?.let { mapOf("lines" to it) },
+            "location" to session?.takeIf { shareLocation() }?.routeSketch(ROUTE_SKETCH_POINTS)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { route ->
+                    mapOf(
+                        "here" to route.last().let { GuidePrompt.formatLatLon(it.lat, it.lon) },
+                        "route" to route.takeIf { it.size > 1 }
+                            ?.joinToString(" → ") { GuidePrompt.formatLatLon(it.lat, it.lon).replace(" ", "") },
+                    )
+                },
         )
     }
 
@@ -172,6 +184,8 @@ class WalkCompanion(
 
     companion object {
         private const val TAG = "Companion"
+        /** Enough to show the shape of a walk without filling the prompt with numbers. */
+        private const val ROUTE_SKETCH_POINTS = 20
 
         fun km(m: Double) = "%.1f".format(Locale.ROOT, m / 1000)
         fun minutes(ms: Long) = (ms / 60_000).toInt()

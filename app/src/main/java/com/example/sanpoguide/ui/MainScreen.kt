@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Roofing
@@ -92,6 +93,7 @@ fun MainScreen(
     val facilities by viewModel.facilities.collectAsStateWithLifecycle()
     val nearestFacilities by viewModel.nearestFacilities.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
+    val route by viewModel.route.collectAsStateWithLifecycle()
     val mood by viewModel.mood.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -151,14 +153,19 @@ fun MainScreen(
             if (nearestFacilities.isNotEmpty()) {
                 FacilityBar(nearestFacilities, onClick = { viewModel.focus(it.facility) })
             }
-            SpotMap(
-                location = location,
-                spots = spots,
-                facilities = facilities,
-                focus = focus,
-                onSpotClick = viewModel::select,
-                modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(),
-            )
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+                SpotMap(
+                    location = location,
+                    heading = rememberHeading(location),
+                    spots = spots,
+                    facilities = facilities,
+                    route = route,
+                    focus = focus,
+                    onSpotClick = viewModel::select,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                route?.let { RouteLabel(it, onClear = viewModel::clearRoute, modifier = Modifier.align(Alignment.TopStart)) }
+            }
             // The list is sorted by distance; when the nearest spot changes, show it again
             // instead of staying anchored to an item that has drifted down the list.
             val listState = rememberLazyListState()
@@ -183,6 +190,38 @@ fun MainScreen(
                 onSpeak = { text -> viewModel.speak(spot.item.poi, text) },
                 onStop = viewModel::stopSpeaking,
             )
+        }
+    }
+}
+
+/** Which spot the line on the map leads to, and a way to hide it. */
+@Composable
+private fun RouteLabel(route: RouteToSpot, onClear: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        shadowElevation = 2.dp,
+        modifier = modifier.padding(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
+            Column(Modifier.weight(1f, fill = false)) {
+                Text(
+                    "${route.spot.name}へ", style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    when {
+                        route.loading -> "ルートを検索中…"
+                        route.route.onPaths -> "道沿いのルート"
+                        else -> "方向のみ（ルートを取得できませんでした）"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onClear) {
+                Icon(Icons.Filled.Close, contentDescription = "ルートを消す")
+            }
         }
     }
 }

@@ -213,6 +213,19 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 )
             }
 
+            SectionTitle("位置情報")
+            SwitchRow(
+                "AI に緯度経度と歩いた経路を送る",
+                "オンにすると、スポットと現在地の緯度経度、今回歩いた経路（間引いたもの）も AI に送り、" +
+                    "場所に即した解説や話しかけにします。オフのときは、スポット名や距離などだけを送ります",
+                draft.shareLocationWithAi, viewModel::setShareLocationWithAi,
+            )
+            Text(
+                "地図のルート表示は、この設定にかかわらず、現在地とスポットの緯度経度を経路検索サービス（OpenStreetMap）に送ります。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             SectionTitle("案内のしきい値")
             Text(
                 "天気の急変・日の入り・近くの施設を、どんなときに知らせるかです。" +

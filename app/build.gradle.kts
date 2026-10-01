@@ -87,4 +87,6 @@ dependencies {
     implementation("com.anthropic:anthropic-java:2.34.0")
 
     testImplementation("junit:junit:4.13.2")
+    // The real org.json; Android's is a stub in local unit tests.
+    testImplementation("org.json:json:20240303")
 }

@@ -30,6 +30,11 @@ data class GuideSettings(
     val spotPhotos: Boolean = true,
     /** Download photos on mobile data too, not only on Wi-Fi. */
     val photosOnMobileData: Boolean = false,
+    /**
+     * Send coordinates (the spot's, the user's and the route walked) to the AI service.
+     * Off by default: without it the AI gets names, distances and figures only.
+     */
+    val shareLocationWithAi: Boolean = false,
 ) {
     fun apiKey(p: Provider = provider): String = apiKeys[p].orEmpty()
     fun model(p: Provider = provider): String = models[p]?.takeIf { it.isNotBlank() } ?: p.defaultModel
@@ -58,6 +63,7 @@ class SettingsRepository(context: Context) {
             putBoolean(KEY_AMBIENT_EARPHONES_ONLY, settings.ambientEarphonesOnly)
             putBoolean(KEY_SPOT_PHOTOS, settings.spotPhotos)
             putBoolean(KEY_PHOTOS_ON_MOBILE, settings.photosOnMobileData)
+            putBoolean(KEY_SHARE_LOCATION_WITH_AI, settings.shareLocationWithAi)
             Provider.entries.forEach { p ->
                 val key = settings.apiKeys[p]?.trim().orEmpty()
                 if (key.isEmpty()) remove(apiKeyPref(p)) else putString(apiKeyPref(p), KeyCipher.encrypt(key))
@@ -100,6 +106,7 @@ class SettingsRepository(context: Context) {
             ambientEarphonesOnly = prefs.getBoolean(KEY_AMBIENT_EARPHONES_ONLY, DEFAULTS.ambientEarphonesOnly),
             spotPhotos = prefs.getBoolean(KEY_SPOT_PHOTOS, DEFAULTS.spotPhotos),
             photosOnMobileData = prefs.getBoolean(KEY_PHOTOS_ON_MOBILE, DEFAULTS.photosOnMobileData),
+            shareLocationWithAi = prefs.getBoolean(KEY_SHARE_LOCATION_WITH_AI, DEFAULTS.shareLocationWithAi),
         )
     }
 
@@ -117,6 +124,7 @@ class SettingsRepository(context: Context) {
         const val KEY_AMBIENT_EARPHONES_ONLY = "ambient_earphones_only"
         const val KEY_SPOT_PHOTOS = "spot_photos"
         const val KEY_PHOTOS_ON_MOBILE = "photos_on_mobile"
+        const val KEY_SHARE_LOCATION_WITH_AI = "share_location_with_ai"
         val DEFAULTS = GuideSettings()
     }
 }

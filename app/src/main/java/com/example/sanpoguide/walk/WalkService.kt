@@ -185,6 +185,8 @@ class WalkService : LifecycleService() {
         // the spot they arrived at has been introduced, and a rest remark may be due instead.
         val stationary = s.restMinutes(now) >= STATIONARY_MINUTES
         if (!stationary && now - s.lastSpotTalkAt >= level.spotGapMs) {
+            // One spot per tick, by distance from the user (spots' distances to each other don't matter).
+            // The ones not picked stay candidates: they get their turn once the gap passes, if still in reach.
             val spot = app.spots.spots.value
                 .filter { poi -> poi.id !in s.talkedAbout && s.visits.none { it.matches(poi) } }
                 .map { it to it.distanceFrom(location) }
@@ -266,6 +268,7 @@ class WalkService : LifecycleService() {
         }
         s.visits += SpotVisit(poi.id, poi.name, poi.category, System.currentTimeMillis(), text, poi.lat, poi.lon)
         app.feed.update(s)
+        app.feed.guide(poi)
         saveProgress(s)
         getSystemService(NotificationManager::class.java)
             .notify(SPOT_NOTIFICATION_ID, spotNotification(poi, text))
@@ -388,6 +391,7 @@ class WalkService : LifecycleService() {
         // Below walking pace (m/s) the reported heading is noise.
         private const val MIN_HEADING_SPEED = 0.5f
         private const val MIN_SAVED_WALK_MS = 60_000L
+        // Measured from the user, not around each spot.
         const val ANNOUNCE_RADIUS_M = 60f
 
         private val _walking = MutableStateFlow(false)
