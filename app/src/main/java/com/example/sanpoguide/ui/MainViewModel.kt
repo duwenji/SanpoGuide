@@ -3,6 +3,7 @@ package com.example.sanpoguide.ui
 import android.annotation.SuppressLint
 import android.app.Application
 import android.location.Location
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sanpoguide.SanpoApp
@@ -11,17 +12,23 @@ import com.example.sanpoguide.companion.Utterance
 import com.example.sanpoguide.data.Facility
 import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
+import com.example.sanpoguide.data.RouteGeometry
 import com.example.sanpoguide.data.SpotPhoto
+import com.example.sanpoguide.data.WalkRoute
+import com.example.sanpoguide.history.LatLon
 import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.walk.WalkService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -48,6 +55,12 @@ sealed interface PhotoState {
     data object WaitingForWifi : PhotoState
     data class Ready(val photo: SpotPhoto) : PhotoState
 }
+
+/**
+ * The way to [spot] drawn on the map; [askedFrom] is where the route was last looked up.
+ * While [loading], [route] is a straight placeholder.
+ */
+data class RouteToSpot(val spot: Poi, val route: WalkRoute, val askedFrom: LatLon, val loading: Boolean = false)
 
 data class SelectedSpot(val item: SpotItem, val guide: GuideState, val photo: PhotoState = PhotoState.None)
 
@@ -94,6 +107,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _focus.value = facility
     }
 
+    /** The spot to show the way to: the one the walk introduced last, or the one the user tapped. */
+    private val routeTarget = MutableStateFlow<Poi?>(null)
+    private val _route = MutableStateFlow<RouteToSpot?>(null)
+    val route: StateFlow<RouteToSpot?> = _route.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            app.feed.guiding.filterNotNull().distinctUntilChanged().collect { routeTarget.value = it }
+        }
+        // Not collectLatest: a location update every few seconds would cancel each lookup in flight.
+        viewModelScope.launch {
+            combine(routeTarget, app.spots.location) { target, loc -> target to loc }
+                .collect { (target, loc) -> updateRoute(target, loc) }
+        }
+    }
+
+    fun clearRoute() {
+        routeTarget.value = null
+    }
+
+    private suspend fun updateRoute(target: Poi?, loc: Location?) {
+        if (target == null) {
+            _route.value = null
+            return
+        }
+        if (loc == null) return
+        val here = LatLon(loc.latitude, loc.longitude)
+        val to = LatLon(target.lat, target.lon)
+        val current = _route.value?.takeIf { it.spot.id == target.id }
+        if (current != null) {
+            // Look the way up again only when the user has left it, so the routing server
+            // (a public one) isn't asked on every step.
+            val stillValid = if (current.route.onPaths) {
+                RouteGeometry.distanceToLineM(here, current.route.points) < OFF_ROUTE_M
+            } else {
+                RouteGeometry.distanceM(current.askedFrom, here) < RETRY_AFTER_M
+            }
+            if (stillValid) {
+                // A straight line follows the user; a found route stays as found.
+                if (!current.route.onPaths) _route.value = current.copy(route = WalkRoute.straight(here, to))
+                return
+            }
+        } else {
+            // Something to look at while the route loads, and what stays if it can't be found.
+            _route.value = RouteToSpot(target, WalkRoute.straight(here, to), here, loading = true)
+        }
+        val found = try {
+            app.routes.walk(here, to)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Route lookup failed; drawing a straight line", e)
+            WalkRoute.straight(here, to)
+        }
+        // The user may have picked another spot meanwhile.
+        if (routeTarget.value?.id == target.id) _route.value = RouteToSpot(target, found, here)
+    }
+
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -128,6 +199,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun select(item: SpotItem) {
+        routeTarget.value = item.poi
         val photo = initialPhotoState(item.poi)
         _selected.value = SelectedSpot(item, GuideState.Loading, photo)
         viewModelScope.launch {
@@ -170,4 +242,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopSpeaking() = app.speaker.stop()
+
+    private companion object {
+        const val TAG = "MainViewModel"
+        /** Farther than this from the drawn route, the user has taken another way. */
+        const val OFF_ROUTE_M = 30.0
+        /** After a failed lookup, try again once the user has moved this far. */
+        const val RETRY_AFTER_M = 100.0
+    }
 }

@@ -19,11 +19,12 @@ class GuideRepository(
         val settings = settingsRepo.settings.value
         // Without an API key, read out a plain summary built from the map tags.
         if (!settings.isConfigured) return prompts.render(Prompts.Fallback.GUIDE, GuidePrompt.fallbackVars(poi))
-        val cacheKey = "${settings.provider}/${settings.model()}/${poi.id}"
+        val share = settings.shareLocationWithAi
+        val cacheKey = "${settings.provider}/${settings.model()}/${poi.id}/$share"
         cache[cacheKey]?.let { return it }
         val text = clientFor(settings).generate(
             prompts.render(Prompts.Guide.SYSTEM),
-            prompts.render(Prompts.Guide.USER, GuidePrompt.spotVars(poi, distanceM)),
+            prompts.render(Prompts.Guide.USER, GuidePrompt.spotVars(poi, distanceM, share)),
         )
         cache[cacheKey] = text
         return text

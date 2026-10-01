@@ -1,9 +1,9 @@
 # 散策ガイドの構造図
 
-アプリ全体を 4 枚の図で説明する。図 1 で「どこに何があるか」をつかみ、図 2〜4 で散策モードの話しかけ・スポット解説・雰囲気という 3 つの主要な流れを追う。
+アプリ全体を 5 枚の図で説明する。図 1 で「どこに何があるか」をつかみ、図 2〜5 で散策モードの話しかけ・スポット解説・雰囲気・地図のルートと向きという 4 つの流れを追う。
 
-- ソース 41 ファイル / 約 5,050 行、パッケージ 10
-- 画面 3（メイン・設定・記録）、常駐サービス 1（`WalkService`）、外部サービス 5
+- ソース 45 ファイル / 約 5,490 行、パッケージ 10
+- 画面 3（メイン・設定・記録）、常駐サービス 1（`WalkService`）、外部サービス 6
 
 図はコードから手で書き起こしたもの。`WalkService` の判定順を変えたり、パッケージを追加したりしたときは、この文書も更新する。
 
@@ -29,7 +29,7 @@ flowchart TB
     history["history<br/>HistoryStore<br/>walk_history.json（端末内）"]
     settings["settings<br/>SettingsRepository<br/>KeyCipher・Threshold"]
     mood["mood<br/>MoodSource・Mood・PlaceGuess"]
-    data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos"]
+    data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos・RouteClient"]
     guide["guide<br/>GuideRepository・Speaker<br/>LlmClient・Provider"]
     companion["companion<br/>WalkCompanion・CompanionFeed<br/>WeatherClient ほか"]
     sound["sound<br/>AmbientPlayer・Voices<br/>※ WalkService が生成"]
@@ -37,21 +37,23 @@ flowchart TB
 
   subgraph EXT["外部・端末"]
     Overpass["Overpass API<br/>スポット・施設"]
+    OSRM["FOSSGIS OSRM<br/>徒歩ルート"]
     Wikimedia["Wikimedia<br/>写真"]
     AI["AI サービス<br/>Claude / OpenAI 互換 API"]
     OpenMeteo["Open-Meteo<br/>天気・予報・日の入り"]
-    Device["端末<br/>TTS・音声出力・GPS"]
+    Device["端末<br/>TTS・音声出力・GPS・方位センサー"]
     GSI["地理院タイル<br/>地図画像"]
   end
 
   MainActivity -- "開始・終了" --> WalkService
   MainViewModel & SettingsViewModel & HistoryViewModel -- "app.◯◯ で参照" --> APP
   WalkService -- "app.◯◯ で参照" --> APP
-  data --> Overpass & Wikimedia
+  data --> Overpass & Wikimedia & OSRM
   guide --> AI
   companion --> OpenMeteo
   sound --> Device
   MainScreen -. "SpotMap が直接取得" .-> GSI
+  MainScreen -. "rememberHeading が読む" .-> Device
 ```
 
 `WalkService` がアプリの中心。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットを見て「いま何を話すか」を決める。`sound` だけは SanpoApp ではなく、WalkService が必要になったときに作る。
@@ -82,9 +84,23 @@ flowchart LR
 - 読み上げ中は判定しない（`Speaker.isSpeaking` と `Mutex` で 1 件ずつ）。
 - 記録の保存は、スポット案内・距離の区切り・散歩の終了のときに行う。
 
+### スポットが近くに複数あるとき
+
+案内範囲（`ANNOUNCE_RADIUS_M` = 60m）は**ユーザーの現在地を中心にした円**で、スポットごとの範囲ではない。スポット同士の距離は判定に使わないので、「A が B の近くにある」こと自体は A の案内に影響しない。
+
+- 1 回の判定で案内するのは 1 件だけ。`notability`（Wikipedia/Wikidata タグで +2、主要カテゴリで +1）が高い方、同点なら近い方を選ぶ。
+- 選ばれなかったスポットは候補に残る。次の判定（30 秒ごと）で次の条件をすべて満たせば案内される。
+  - 前回のスポット案内から `TalkLevel.spotGapMs` 以上経った
+  - まだ 60m 以内にいる
+  - 2 分以上とどまっていない（とどまっている間は周りを順に紹介しない）
+  - 読み上げ中でない
+- 間隔が空く前に 60m の外へ出たら、そのときは案内されない。案内済み（`talkedAbout`）にはならないので、また近づけば案内される。
+- 過去の訪問記録と一致するスポット（同じ ID、または同じ名前で近い位置）は候補から外れる。
+- スポットの通知は 1 枠（`SPOT_NOTIFICATION_ID`）を使い回すため、新しい案内が前の通知を置き換える。
+
 ## 図 3 · スポット解説: 地図でスポットをタップしたとき
 
-解説と写真は別々に取りに行く。解説は「AI サービス・モデル・スポット」の組み合わせでキャッシュするため、同じスポットで料金がかかるのは 1 回だけ。
+解説と写真は別々に取りに行く。解説は「AI サービス・モデル・スポット・位置情報を送る設定」の組み合わせでキャッシュするため、同じスポットで料金がかかるのは 1 回だけ。
 
 ```mermaid
 flowchart LR
@@ -117,23 +133,57 @@ flowchart LR
 
 設定の「雰囲気に合わせる」をオフにすると、配色・絵・話し方は雰囲気を使わなくなる。背景音の選択だけは常に雰囲気を使う。
 
+## 図 5 · 地図: ルートと向き
+
+地図には、案内中のスポットまでの道と、ユーザーの向いている方向を描く。どちらも画面（`MainViewModel` と `SpotMap`）だけの処理で、`WalkService` は案内したスポットを `CompanionFeed.guiding` に出すだけ。
+
+```mermaid
+flowchart LR
+  Guided["散策中に案内したスポット<br/>CompanionFeed.guiding"] --> Target
+  Tapped["タップしたスポット<br/>MainViewModel.select()"] --> Target
+  Target["ルートの対象<br/>（新しい方。✕ で消す）"] --> Update
+  Loc["位置の更新"] --> Update
+  Update["<b>updateRoute()</b><br/>対象が変わった・30m 外れたときだけ問い合わせ"] --> RouteClient["RouteClient"]
+  RouteClient --> OSRM["FOSSGIS OSRM<br/>徒歩ルート"]
+  RouteClient -- "失敗時" --> Straight["点線の直線<br/>100m 動くたびに再試行"]
+  Update --> Map["SpotMap<br/>青い線"]
+  Sensor["方位センサー<br/>（なければ GPS の進行方向）"] --> Heading["rememberHeading()<br/>真北に補正"]
+  Heading --> Map2["SpotMap<br/>現在地の点に扇形"]
+```
+
+- ルートを取得するあいだは直線を仮に描き、地図左上のラベルに「ルートを検索中…」と出す。
+- 経路サービスには現在地とスポットの緯度経度を送る。AI に位置を送るかどうかの設定（`shareLocationWithAi`）とは別で、ルート表示には常に送る。
+- 方位センサーは画面が表示されている間だけ動かす。向きが 3° 以上変わったときだけ描き直す。
+- 扇形の画像は 5° ごとに 1 枚作り、使い回す。
+
+### AI に送る位置情報
+
+設定「AI に緯度経度と歩いた経路を送る」（`GuideSettings.shareLocationWithAi`、既定はオフ）をオンにしたときだけ、次を AI に送る。
+
+| 送り先のプロンプト | 追加する値 | 作るところ |
+|---|---|---|
+| スポット解説（`guide/user`） | スポットの緯度経度（`coords`） | `GuidePrompt.spotVars()` |
+| 話しかけ（`companion/situation`） | 現在地の緯度経度と、今回歩いた経路を最大 20 点に間引いたもの（`location`） | `WalkCompanion.situationVars()` |
+
+解説のキャッシュは設定のオン・オフで分けている（同じスポットでも、緯度経度ありとなしで別の解説になるため）。
+
 ## パッケージ一覧
 
 パスは `app/src/main/java/com/example/sanpoguide/` からの相対。行数は空行・コメントを含む。
 
 | パッケージ | 役割 | 主なファイル | 行数 |
 |---|---|---|---:|
-| `ui` | Compose の 3 画面、地図、発言カード、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, MoodScene, MainViewModel | 1,912 |
-| `companion` | 散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定 | WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient | 612 |
-| `data` | Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真 | OverpassClient, SpotRepository, SpotPhotos | 515 |
+| `ui` | Compose の 3 画面、地図（ルートと向きを含む）、発言カード、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, SpotMap, Heading, MoodScene, MainViewModel | 2,200 |
+| `companion` | 散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定 | WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient | 641 |
+| `data` | Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート | OverpassClient, SpotRepository, SpotPhotos, RouteClient | 617 |
 | `sound` | 背景音の選択・その場での合成・再生 | Soundscape, Voices, AmbientPlayer | 436 |
-| `walk` | 散策モードのフォアグラウンドサービス。いつ何を話すかを決める | WalkService | 404 |
-| `guide` | AI サービスの抽象と実装、スポット解説とキャッシュ、TTS | GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker | 342 |
-| `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値 | SettingsRepository, KeyCipher, TalkLevel, Threshold | 250 |
+| `walk` | 散策モードのフォアグラウンドサービス。いつ何を話すかを決める | WalkService | 408 |
+| `guide` | AI サービスの抽象と実装、スポット解説とキャッシュ、TTS | GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker | 349 |
+| `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値 | SettingsRepository, KeyCipher, TalkLevel, Threshold | 258 |
 | `mood` | 雰囲気のモデル、場所の種類の推定、現在の雰囲気 | Mood, PlaceGuess, MoodSource | 186 |
 | `history` | 散歩の記録（端末内 JSON、最新 500 件）と再訪の判定 | HistoryStore | 173 |
 | `prompt` | プロンプトファイルの読み込みと変数の埋め込み | PromptTemplates, Prompts | 132 |
-| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 88 |
+| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 92 |
 
 ## 変更の入口: こうしたいときはここを開く
 
@@ -146,6 +196,9 @@ flowchart LR
 | 施設案内の条件を変える | `companion/FacilityAdvisor.kt` |
 | AI サービスを追加する | OpenAI 互換なら `guide/Provider.kt` に 1 行。独自 API なら `LlmClient` を実装して `GuideRepository.createClient` に分岐を足す |
 | 検索するスポットの種類を変える | `data/OverpassClient.kt` |
+| 地図のルート表示（対象・再検索の条件）を変える | `ui/MainViewModel.kt` の `updateRoute()`。経路サービスは `data/RouteClient.kt` |
+| 地図の向きの表示を変える | `ui/Heading.kt`（向きの取得）・`ui/SpotMap.kt`（描画） |
+| AI に送る位置情報を変える | `guide/GuidePrompt.kt`・`companion/WalkCompanion.kt`（設定 `shareLocationWithAi` で切り替え） |
 | 配色・絵・背景音の選び方を変える | `ui/MoodTheme.kt`・`ui/MoodScene.kt`・`sound/Soundscape.kt` |
 | 記録の保存形式や再訪の判定を変える | `history/HistoryStore.kt` |
 

@@ -7,6 +7,7 @@ import com.example.sanpoguide.companion.WalkCompanion
 import com.example.sanpoguide.companion.CompanionFeed
 import com.example.sanpoguide.companion.WeatherClient
 import com.example.sanpoguide.data.OverpassClient
+import com.example.sanpoguide.data.RouteClient
 import com.example.sanpoguide.data.SpotPhotos
 import com.example.sanpoguide.data.SpotRepository
 import com.example.sanpoguide.guide.GuideRepository
@@ -45,6 +46,7 @@ class SanpoApp : Application() {
     lateinit var photos: SpotPhotos
         private set
     val weather = WeatherClient()
+    val routes = RouteClient()
     val feed = CompanionFeed()
 
     override fun onCreate() {
@@ -59,9 +61,11 @@ class SanpoApp : Application() {
         photos = SpotPhotos(this)
         history = HistoryStore(this)
         mood = MoodSource(spots, feed.weather, appScope)
-        companion = WalkCompanion(guides, history, prompts) {
-            mood.mood.value.takeIf { settings.settings.value.moodEnabled }
-        }
+        companion = WalkCompanion(
+            guides, history, prompts,
+            mood = { mood.mood.value.takeIf { settings.settings.value.moodEnabled } },
+            shareLocation = { settings.settings.value.shareLocationWithAi },
+        )
         appScope.launch { history.load() }
 
         getSystemService(NotificationManager::class.java).apply {

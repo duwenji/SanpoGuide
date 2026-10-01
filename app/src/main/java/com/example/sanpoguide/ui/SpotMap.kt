@@ -1,5 +1,15 @@
 package com.example.sanpoguide.ui
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.location.Location
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -17,6 +27,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
+import kotlin.math.roundToInt
 
 /** GSI (Geospatial Information Authority of Japan) standard map tiles. No API key needed. */
 private val GsiStandard = XYTileSource(
@@ -46,17 +58,23 @@ fun facilityColor(kind: FacilityKind) = when (kind) {
     FacilityKind.BENCH -> Color(0xFF8D6E63)
 }
 
-/** Map showing the user's position, nearby spots and amenities. Pans to [focus] when it changes. */
+/**
+ * Map showing the user's position (with the way they face, [heading]), nearby spots and
+ * amenities, and the way to the spot being guided to. Pans to [focus] when it changes.
+ */
 @Composable
 fun SpotMap(
     location: Location?,
+    heading: Float?,
     spots: List<SpotItem>,
     facilities: List<FacilityItem>,
+    route: RouteToSpot?,
     focus: Facility?,
     onSpotClick: (SpotItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
     val spotIcon = remember { ContextCompat.getDrawable(context, R.drawable.spot_dot) }
     val meIcon = remember { ContextCompat.getDrawable(context, R.drawable.me_dot) }
     val facilityIcons = remember { FacilityKind.entries.associateWith { ContextCompat.getDrawable(context, facilityDot(it)) } }
@@ -116,13 +134,26 @@ fun SpotMap(
         map.overlays.clear()
         // Under the spots, so a bench in a park doesn't cover the park.
         map.overlays += markers.facilities
+        if (route != null) {
+            val line = markers.route ?: Polyline(map).apply {
+                outlinePaint.color = ROUTE_COLOR
+                outlinePaint.strokeWidth = 5 * density
+                outlinePaint.strokeCap = Paint.Cap.ROUND
+                outlinePaint.strokeJoin = Paint.Join.ROUND
+                infoWindow = null
+            }.also { markers.route = it }
+            // Dashed when it's only the direction, not a way along paths.
+            line.outlinePaint.pathEffect = if (route.route.onPaths) null else DashPathEffect(floatArrayOf(12 * density, 8 * density), 0f)
+            line.setPoints(route.route.points.map { GeoPoint(it.lat, it.lon) })
+            map.overlays += line
+        }
         map.overlays += markers.spots
         if (location != null) {
             val me = markers.me ?: Marker(map).apply {
-                icon = meIcon
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 setInfoWindow(null)
             }.also { markers.me = it }
+            me.icon = heading?.let { markers.headingIcon(context, it) } ?: meIcon
             me.position = GeoPoint(location.latitude, location.longitude)
             map.overlays += me
             val last = centeredAt[0]
@@ -149,4 +180,41 @@ private class MapMarkers {
     var spotsById: Map<String, SpotItem> = emptyMap()
     var onSpotClick: (SpotItem) -> Unit = {}
     var me: Marker? = null
+    var route: Polyline? = null
+    private val headingIcons = HashMap<Int, Drawable>()
+
+    /** The position dot with a beam toward [degrees]; one per [HEADING_STEP] degrees, made on first use. */
+    fun headingIcon(context: Context, degrees: Float): Drawable {
+        val step = ((degrees / HEADING_STEP).roundToInt() * HEADING_STEP) % 360
+        return headingIcons.getOrPut(step) { drawHeadingIcon(context, step.toFloat()) }
+    }
+}
+
+private const val HEADING_STEP = 5
+private const val ROUTE_COLOR = 0xCC1E88E5.toInt()
+
+/** Same dot as `me_dot`, with a fading beam behind it. Canvas rotation is clockwise, like compass degrees. */
+private fun drawHeadingIcon(context: Context, degrees: Float): Drawable {
+    val d = context.resources.displayMetrics.density
+    val size = (56 * d).roundToInt()
+    val c = size / 2f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.save()
+    canvas.rotate(degrees, c, c)
+    val beam = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(c, c, c, 0x991E88E5.toInt(), 0x001E88E5, Shader.TileMode.CLAMP)
+    }
+    canvas.drawArc(RectF(0f, 0f, size.toFloat(), size.toFloat()), -90f - 30f, 60f, true, beam)
+    canvas.restore()
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1E88E5.toInt() }
+    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 3 * d
+    }
+    val r = 10 * d - stroke.strokeWidth / 2
+    canvas.drawCircle(c, c, r, fill)
+    canvas.drawCircle(c, c, r, stroke)
+    return BitmapDrawable(context.resources, bitmap)
 }

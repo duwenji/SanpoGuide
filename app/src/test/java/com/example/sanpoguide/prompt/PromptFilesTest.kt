@@ -45,9 +45,10 @@ class PromptFilesTest {
             spot + mapOf(
                 "distance_m" to 45, "inside" to false,
                 "tags" to listOf("amenity=place_of_worship", "religion=shinto"),
+                "coords" to "35.32580, 139.55620",
             ),
-            spot + mapOf("distance_m" to 0, "inside" to true, "tags" to listOf("leisure=park")),
-            spot + mapOf("distance_m" to null, "inside" to false, "tags" to emptyList<String>()),
+            spot + mapOf("distance_m" to 0, "inside" to true, "tags" to listOf("leisure=park"), "coords" to null),
+            spot + mapOf("distance_m" to null, "inside" to false, "tags" to emptyList<String>(), "coords" to null),
         ),
         Prompts.Talk.SYSTEM to listOf(emptyMap()),
         Prompts.Talk.SITUATION to listOf(
@@ -61,10 +62,22 @@ class PromptFilesTest {
                     "spots" to "時計台、狛犬", "week_count" to 5, "today_number" to 6,
                 ),
                 "recent" to mapOf("lines" to listOf("また一緒に歩けてうれしいよ。")),
+                "location" to mapOf(
+                    "here" to "35.32580, 139.55620",
+                    "route" to "35.31940,139.55050 → 35.32270,139.55340 → 35.32580,139.55620",
+                ),
+            ),
+            mapOf(
+                "now" to "9月28日（月）14:10", "time_of_day" to "昼", "season" to "秋",
+                "weather" to null, "mood" to null,
+                "walk" to mapOf("minutes" to 0, "km" to "0.0", "spots" to null),
+                "last_walk" to null, "recent" to null,
+                "location" to mapOf("here" to "35.31940, 139.55050", "route" to null),
             ),
             mapOf(
                 "now" to "9月28日（月）8:00", "time_of_day" to "朝", "season" to "秋",
                 "weather" to null, "mood" to null, "walk" to null, "last_walk" to null, "recent" to null,
+                "location" to null,
             ),
         ),
         Prompts.event(Prompts.Event.START) to listOf(emptyMap()),

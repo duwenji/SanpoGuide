@@ -1,6 +1,7 @@
 package com.example.sanpoguide.companion
 
 import android.location.Location
+import com.example.sanpoguide.data.RouteGeometry
 import com.example.sanpoguide.history.LatLon
 import com.example.sanpoguide.history.SpotVisit
 import com.example.sanpoguide.history.WalkRecord
@@ -60,6 +61,9 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
         }
         trackRest(location)
     }
+
+    /** The route walked so far, cut down to at most [maxPoints] evenly spread points; ends at the latest one. */
+    fun routeSketch(maxPoints: Int): List<LatLon> = RouteGeometry.thin(route, maxPoints)
 
     /** Minutes the user has stayed within [REST_RADIUS_M], or 0 if moving. */
     fun restMinutes(now: Long = System.currentTimeMillis()): Int =

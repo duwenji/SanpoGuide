@@ -1,5 +1,6 @@
 package com.example.sanpoguide.companion
 
+import com.example.sanpoguide.data.Poi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,9 +29,14 @@ class CompanionFeed {
     /** Spot ids talked about during the current walk. */
     val talkedAbout: StateFlow<Set<String>> = _talkedAbout.asStateFlow()
 
+    private val _guiding = MutableStateFlow<Poi?>(null)
+    /** The spot the current walk last introduced; the map shows the way to it. Null outside walk mode. */
+    val guiding: StateFlow<Poi?> = _guiding.asStateFlow()
+
     fun startWalk(session: WalkSession) {
         _lines.value = emptyList()
         _talkedAbout.value = emptySet()
+        _guiding.value = null
         update(session)
     }
 
@@ -42,10 +48,15 @@ class CompanionFeed {
     fun endWalk() {
         _live.value = null
         _weather.value = null
+        _guiding.value = null
     }
 
     fun updateWeather(weather: Weather?) {
         _weather.value = weather
+    }
+
+    fun guide(spot: Poi) {
+        _guiding.value = spot
     }
 
     fun add(line: Utterance) = _lines.update { (listOf(line) + it).take(MAX_LINES) }
