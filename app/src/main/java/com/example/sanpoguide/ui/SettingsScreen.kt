@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.sanpoguide.guide.Provider
+import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
@@ -213,6 +214,45 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 )
             }
 
+            SectionTitle("地図")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MapStyle.entries.forEach { style ->
+                    FilterChip(
+                        selected = draft.mapStyle == style,
+                        onClick = { viewModel.setMapStyle(style) },
+                        label = { Text(style.label) },
+                    )
+                }
+            }
+            Text(
+                draft.mapStyle.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (draft.mapStyle.needsGoogleKey) {
+                Text("Google Maps Platform の APIキー", style = MaterialTheme.typography.labelLarge)
+                ApiKeyField(value = draft.googleMapsApiKey, onValueChange = viewModel::setGoogleMapsApiKey)
+                Text(
+                    "Google Cloud でプロジェクトに請求先を登録し、Map Tiles API を有効にしてからキーを作成してください。" +
+                        "表示した地図の量に応じて、そのアカウントに料金がかかることがあります（無料枠あり）。" +
+                        "キーは「API の制限」で Map Tiles API だけに絞り、割り当て（上限）も設定しておくと安全です。" +
+                        "地図を表示すると、表示している場所の地図画像を Google から取得します。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val uriHandler = LocalUriHandler.current
+                TextButton(onClick = { uriHandler.openUri(MAP_TILES_API_URL) }) {
+                    Text("Map Tiles API を有効にする（Google Cloud）")
+                }
+                if (draft.googleMapsApiKey.isBlank()) {
+                    Text(
+                        "キーが未設定のあいだは、地理院の標準地図で表示します。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
             SectionTitle("位置情報")
             SwitchRow(
                 "AI に緯度経度と歩いた経路を送る",
@@ -267,6 +307,8 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
         }
     }
 }
+
+private const val MAP_TILES_API_URL = "https://console.cloud.google.com/apis/library/tile.googleapis.com"
 
 @Composable
 private fun ApiKeyField(value: String, onValueChange: (String) -> Unit) {

@@ -2,8 +2,8 @@
 
 アプリ全体を 5 枚の図で説明する。図 1 で「どこに何があるか」をつかみ、図 2〜5 で散策モードの話しかけ・スポット解説・雰囲気・地図のルートと向きという 4 つの流れを追う。
 
-- ソース 45 ファイル / 約 5,490 行、パッケージ 10
-- 画面 3（メイン・設定・記録）、常駐サービス 1（`WalkService`）、外部サービス 6
+- ソース 48 ファイル / 約 5,870 行、パッケージ 10
+- 画面 3（メイン・設定・記録）、常駐サービス 1（`WalkService`）、外部サービス 7（Google マップは設定で選んだときだけ）
 
 図はコードから手で書き起こしたもの。`WalkService` の判定順を変えたり、パッケージを追加したりしたときは、この文書も更新する。
 
@@ -29,7 +29,7 @@ flowchart TB
     history["history<br/>HistoryStore<br/>walk_history.json（端末内）"]
     settings["settings<br/>SettingsRepository<br/>KeyCipher・Threshold"]
     mood["mood<br/>MoodSource・Mood・PlaceGuess"]
-    data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos・RouteClient"]
+    data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos<br/>RouteClient・GoogleMapTiles"]
     guide["guide<br/>GuideRepository・Speaker<br/>LlmClient・Provider"]
     companion["companion<br/>WalkCompanion・CompanionFeed<br/>WeatherClient ほか"]
     sound["sound<br/>AmbientPlayer・Voices<br/>※ WalkService が生成"]
@@ -42,13 +42,14 @@ flowchart TB
     AI["AI サービス<br/>Claude / OpenAI 互換 API"]
     OpenMeteo["Open-Meteo<br/>天気・予報・日の入り"]
     Device["端末<br/>TTS・音声出力・GPS・方位センサー"]
-    GSI["地理院タイル<br/>地図画像"]
+    GSI["地図画像<br/>地理院タイル / Google Map Tiles API"]
   end
 
   MainActivity -- "開始・終了" --> WalkService
   MainViewModel & SettingsViewModel & HistoryViewModel -- "app.◯◯ で参照" --> APP
   WalkService -- "app.◯◯ で参照" --> APP
   data --> Overpass & Wikimedia & OSRM
+  data -. "セッション・出典" .-> GSI
   guide --> AI
   companion --> OpenMeteo
   sound --> Device
@@ -156,6 +157,15 @@ flowchart LR
 - 方位センサーは画面が表示されている間だけ動かす。向きが 3° 以上変わったときだけ描き直す。
 - 扇形の画像は 5° ごとに 1 枚作り、使い回す。
 
+### 地図の種類
+
+設定の「地図」（`GuideSettings.mapStyle`）で、国土地理院の 4 種類（標準・淡色・写真・標高）と Google マップの 2 種類（地図・航空写真）を選ぶ。
+
+- 設定値は `MainViewModel.map` が `MapTiles` に変換し、`SpotMap` が osmdroid の地図画像（`ui/MapTiles.kt`）を差し替える。
+- Google は利用者自身の API キーで Map Tiles API のセッションを作り（`GoogleMapTiles.session()`、2 週間有効）、地図画像の URL に付ける。
+- Google の地図を表示している間は、規約に従い左下にロゴ、右下に表示範囲の出典を出す。出典は地図の移動が止まってから viewport API で取得する（`onMapViewport()`）。
+- キーが未設定・無効・接続できないときは地理院の標準地図にし、理由を地図の上に出す。
+
 ### AI に送る位置情報
 
 設定「AI に緯度経度と歩いた経路を送る」（`GuideSettings.shareLocationWithAi`、既定はオフ）をオンにしたときだけ、次を AI に送る。
@@ -173,17 +183,17 @@ flowchart LR
 
 | パッケージ | 役割 | 主なファイル | 行数 |
 |---|---|---|---:|
-| `ui` | Compose の 3 画面、地図（ルートと向きを含む）、発言カード、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, SpotMap, Heading, MoodScene, MainViewModel | 2,200 |
+| `ui` | Compose の 3 画面、地図（種類の切り替え・ルート・向きを含む）、発言カード、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, SpotMap, MapTiles, Heading, MoodScene, MainViewModel | 2,438 |
+| `data` | Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート、Google の地図タイルのセッションと出典 | OverpassClient, SpotRepository, SpotPhotos, RouteClient, GoogleMapTiles | 721 |
 | `companion` | 散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定 | WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient | 641 |
-| `data` | Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート | OverpassClient, SpotRepository, SpotPhotos, RouteClient | 617 |
 | `sound` | 背景音の選択・その場での合成・再生 | Soundscape, Voices, AmbientPlayer | 436 |
 | `walk` | 散策モードのフォアグラウンドサービス。いつ何を話すかを決める | WalkService | 408 |
 | `guide` | AI サービスの抽象と実装、スポット解説とキャッシュ、TTS | GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker | 349 |
-| `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値 | SettingsRepository, KeyCipher, TalkLevel, Threshold | 258 |
+| `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値、地図の種類 | SettingsRepository, KeyCipher, TalkLevel, Threshold, MapStyle | 293 |
 | `mood` | 雰囲気のモデル、場所の種類の推定、現在の雰囲気 | Mood, PlaceGuess, MoodSource | 186 |
 | `history` | 散歩の記録（端末内 JSON、最新 500 件）と再訪の判定 | HistoryStore | 173 |
 | `prompt` | プロンプトファイルの読み込みと変数の埋め込み | PromptTemplates, Prompts | 132 |
-| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 92 |
+| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 94 |
 
 ## 変更の入口: こうしたいときはここを開く
 
@@ -197,6 +207,7 @@ flowchart LR
 | AI サービスを追加する | OpenAI 互換なら `guide/Provider.kt` に 1 行。独自 API なら `LlmClient` を実装して `GuideRepository.createClient` に分岐を足す |
 | 検索するスポットの種類を変える | `data/OverpassClient.kt` |
 | 地図のルート表示（対象・再検索の条件）を変える | `ui/MainViewModel.kt` の `updateRoute()`。経路サービスは `data/RouteClient.kt` |
+| 地図の種類を追加・変更する | `settings/MapStyle.kt`（設定の選択肢）・`ui/MapTiles.kt`（地図画像の URL と出典）。Google は `data/GoogleMapTiles.kt` |
 | 地図の向きの表示を変える | `ui/Heading.kt`（向きの取得）・`ui/SpotMap.kt`（描画） |
 | AI に送る位置情報を変える | `guide/GuidePrompt.kt`・`companion/WalkCompanion.kt`（設定 `shareLocationWithAi` で切り替え） |
 | 配色・絵・背景音の選び方を変える | `ui/MoodTheme.kt`・`ui/MoodScene.kt`・`sound/Soundscape.kt` |
