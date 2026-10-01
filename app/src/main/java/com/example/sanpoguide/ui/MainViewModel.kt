@@ -118,15 +118,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Bumped by [refresh], so a Google map that failed to connect is tried again. */
     private val mapRetry = MutableStateFlow(0)
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val map: StateFlow<MapState> = combine(settings, mapRetry) { s, _ -> s.mapStyle to s.googleMapsApiKey.trim() }
-        .mapLatest { (style, key) -> resolveMap(style, key) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, MapState(MapTiles.Gsi(MapStyle.GSI_STANDARD)))
-
+    // Declared before [map]: its eager collection runs resolveMap() during construction.
     private val _googleCopyright = MutableStateFlow<String?>(null)
     /** Google's attribution for the area on screen; must be shown while Google tiles are. */
     val googleCopyright: StateFlow<String?> = _googleCopyright.asStateFlow()
     private var copyrightJob: Job? = null
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val map: StateFlow<MapState> = combine(settings, mapRetry) { s, _ -> s.mapStyle to s.googleMapsApiKey.trim() }
+        .mapLatest { (style, key) -> resolveMap(style, key) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, MapState(MapTiles.Gsi(MapStyle.GSI_STANDARD)))
 
     private suspend fun resolveMap(style: MapStyle, apiKey: String): MapState {
         _googleCopyright.value = null
