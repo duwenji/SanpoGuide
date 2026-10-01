@@ -10,6 +10,7 @@ import com.example.sanpoguide.SanpoApp
 import com.example.sanpoguide.companion.LiveWalk
 import com.example.sanpoguide.companion.Utterance
 import com.example.sanpoguide.data.Facility
+import com.example.sanpoguide.data.GoogleMapsException
 import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
 import com.example.sanpoguide.data.RouteGeometry
@@ -18,10 +19,13 @@ import com.example.sanpoguide.data.WalkRoute
 import com.example.sanpoguide.history.LatLon
 import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.settings.GuideSettings
+import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.walk.WalkService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,6 +66,9 @@ sealed interface PhotoState {
  * While [loading], [route] is a straight placeholder.
  */
 data class RouteToSpot(val spot: Poi, val route: WalkRoute, val askedFrom: LatLon, val loading: Boolean = false)
+
+/** What the map shows; [notice] says why it fell back to the GSI map, if it did. */
+data class MapState(val tiles: MapTiles, val notice: String? = null)
 
 data class SelectedSpot(val item: SpotItem, val guide: GuideState, val photo: PhotoState = PhotoState.None)
 
@@ -105,6 +113,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun focus(facility: Facility) {
         _focus.value = facility
+    }
+
+    /** Bumped by [refresh], so a Google map that failed to connect is tried again. */
+    private val mapRetry = MutableStateFlow(0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val map: StateFlow<MapState> = combine(settings, mapRetry) { s, _ -> s.mapStyle to s.googleMapsApiKey.trim() }
+        .mapLatest { (style, key) -> resolveMap(style, key) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, MapState(MapTiles.Gsi(MapStyle.GSI_STANDARD)))
+
+    private val _googleCopyright = MutableStateFlow<String?>(null)
+    /** Google's attribution for the area on screen; must be shown while Google tiles are. */
+    val googleCopyright: StateFlow<String?> = _googleCopyright.asStateFlow()
+    private var copyrightJob: Job? = null
+
+    private suspend fun resolveMap(style: MapStyle, apiKey: String): MapState {
+        _googleCopyright.value = null
+        val type = style.google ?: return MapState(MapTiles.Gsi(style))
+        val fallback = MapTiles.Gsi(MapStyle.GSI_STANDARD)
+        if (apiKey.isEmpty()) return MapState(fallback, "Google マップの APIキーが未設定のため、地理院の地図で表示しています")
+        return try {
+            MapState(MapTiles.Google(style, type, apiKey, app.googleTiles.session(apiKey, type)))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: GoogleMapsException) {
+            MapState(fallback, "${e.message}。地理院の地図で表示しています")
+        } catch (e: Exception) {
+            Log.w(TAG, "Map Tiles API session failed", e)
+            MapState(fallback, "Google マップに接続できなかったため、地理院の地図で表示しています（再検索で再接続します）")
+        }
+    }
+
+    /** The map settled on a new area; fetches the attribution for it when Google tiles are shown. */
+    fun onMapViewport(zoom: Int, north: Double, south: Double, east: Double, west: Double) {
+        val tiles = map.value.tiles as? MapTiles.Google ?: return
+        copyrightJob?.cancel()
+        copyrightJob = viewModelScope.launch {
+            try {
+                val text = app.googleTiles.copyright(tiles.apiKey, tiles.session, zoom, north, south, east, west)
+                if (map.value.tiles == tiles) _googleCopyright.value = text
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Map Tiles API viewport info failed", e)
+            }
+        }
     }
 
     /** The spot to show the way to: the one the walk introduced last, or the one the user tapped. */
@@ -176,6 +230,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     @SuppressLint("MissingPermission") // Called only after the permission is granted.
     fun refresh() {
+        if (map.value.notice != null) mapRetry.update { it + 1 }
         if (_loading.value) return
         viewModelScope.launch {
             _loading.value = true

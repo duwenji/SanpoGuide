@@ -9,6 +9,7 @@ import com.example.sanpoguide.guide.GuideRepository
 import com.example.sanpoguide.guide.Provider
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.GuideSettings
+import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
@@ -55,6 +56,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setSpotPhotos(on: Boolean) = edit { it.copy(spotPhotos = on) }
     fun setPhotosOnMobileData(on: Boolean) = edit { it.copy(photosOnMobileData = on) }
     fun setShareLocationWithAi(on: Boolean) = edit { it.copy(shareLocationWithAi = on) }
+    fun setMapStyle(style: MapStyle) = edit { it.copy(mapStyle = style) }
+    fun setGoogleMapsApiKey(key: String) = edit { it.copy(googleMapsApiKey = key) }
 
     /** [value] null (blank or not a number) is kept as invalid, so the field shows an error. */
     fun setThreshold(t: Threshold, value: Int?) = edit { it.copy(thresholds = it.thresholds.with(t, value ?: INVALID)) }

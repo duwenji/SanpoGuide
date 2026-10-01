@@ -93,11 +93,11 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
     <h1>散策ガイドの構造図</h1>
     <p>アプリ全体を 5 枚の図で説明します。最初の図で「どこに何があるか」をつかみ、残りの図で散策モードの話しかけ・スポット解説・雰囲気・地図のルートと向きという 4 つの流れを追います。</p>
     <div class="facts">
-      <span>ソース <b>45 ファイル / 約 5,490 行</b></span>
+      <span>ソース <b>48 ファイル / 約 5,870 行</b></span>
       <span>パッケージ <b>10</b></span>
       <span>画面 <b>3</b>（メイン・設定・記録）</span>
       <span>常駐サービス <b>1</b>（WalkService）</span>
-      <span>外部サービス <b>6</b></span>
+      <span>外部サービス <b>7</b>（Google マップは任意）</span>
     </div>
   </header>
 
@@ -130,7 +130,7 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
         <rect class="bx" x="276" y="28" width="200" height="44" rx="8"/><text class="tm" x="376" y="47">MainScreen</text><text class="sm" x="376" y="63">SpotMap · CompanionCard</text>
         <rect class="bx" x="496" y="28" width="150" height="44" rx="8"/><text class="tm" x="571" y="55">SettingsScreen</text>
         <rect class="bx" x="666" y="28" width="140" height="44" rx="8"/><text class="tm" x="736" y="55">HistoryScreen</text>
-        <rect class="bx-ext" x="826" y="28" width="138" height="44" rx="8"/><text class="te" x="895" y="47">地理院タイル</text><text class="s" x="895" y="63">SpotMap が直接取得</text>
+        <rect class="bx-ext" x="826" y="28" width="138" height="44" rx="8"/><text class="te" x="895" y="47">地図画像</text><text class="s" x="895" y="63">地理院 / Google</text>
         <rect class="bx" x="276" y="90" width="200" height="36" rx="8"/><text class="tm" x="376" y="113">MainViewModel</text>
         <rect class="bx" x="496" y="90" width="150" height="36" rx="8"/><text class="tm" x="571" y="113">SettingsViewModel</text>
         <rect class="bx" x="666" y="90" width="140" height="36" rx="8"/><text class="tm" x="736" y="113">HistoryViewModel</text>
@@ -181,7 +181,7 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
         <rect class="bx-ext" x="752" y="520" width="200" height="64" rx="8"/><text class="te" x="852" y="546">端末</text><text class="s" x="852" y="564">TTS・音声出力・GPS・方位センサー</text>
       </svg>
       </div>
-      <figcaption>橙色の <code>WalkService</code> がアプリの中心です。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットを見て「いま何を話すか」を決めます。点線の枠は外部サービスです。<code>sound</code> だけは SanpoApp ではなく WalkService が必要になったときに作ります。OSRM は FOSSGIS が運営する徒歩ルートの公開サーバーです。方位センサーは画面（<code>rememberHeading()</code>）が直接読みます。</figcaption>
+      <figcaption>橙色の <code>WalkService</code> がアプリの中心です。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットを見て「いま何を話すか」を決めます。点線の枠は外部サービスです。<code>sound</code> だけは SanpoApp ではなく WalkService が必要になったときに作ります。OSRM は FOSSGIS が運営する徒歩ルートの公開サーバーです。右上の地図画像は <code>SpotMap</code> が直接取得します。Google マップを選んだときだけ、<code>data</code> の <code>GoogleMapTiles</code> がセッションと出典を取りに行きます。方位センサーは画面（<code>rememberHeading()</code>）が直接読みます。</figcaption>
     </figure>
   </section>
 
@@ -388,6 +388,16 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
       <figcaption>経路サービスには現在地とスポットの緯度経度を送ります。これは AI に位置を送るかどうかの設定とは別で、ルート表示には常に送ります。方位センサーは画面が表示されている間だけ動かし、扇形の画像は 5° ごとに 1 枚作って使い回します。</figcaption>
     </figure>
     <div class="sub">
+      <h3>地図の種類</h3>
+      <p>設定の「地図」（<code>GuideSettings.mapStyle</code>）で、国土地理院の 4 種類（標準・淡色・写真・標高）と Google マップの 2 種類（地図・航空写真）を選びます。</p>
+      <ul>
+        <li>設定値は <code>MainViewModel.map</code> が <code>MapTiles</code> に変換し、<code>SpotMap</code> が osmdroid の地図画像（<code>ui/MapTiles.kt</code>）を差し替えます。</li>
+        <li>Google は利用者自身の API キーで Map Tiles API のセッションを作り（<code>GoogleMapTiles.session()</code>、2 週間有効）、地図画像の URL に付けます。</li>
+        <li>Google の地図を表示している間は、規約に従い左下にロゴ、右下に表示範囲の出典を出します。出典は地図の移動が止まってから viewport API で取得します（<code>onMapViewport()</code>）。</li>
+        <li>キーが未設定・無効・接続できないときは地理院の標準地図にし、理由を地図の上に出します。</li>
+      </ul>
+    </div>
+    <div class="sub">
       <h3>AI に送る位置情報</h3>
       <p>設定「AI に緯度経度と歩いた経路を送る」（<code>GuideSettings.shareLocationWithAi</code>、既定はオフ）をオンにしたときだけ、次を AI に送ります。</p>
       <ul>
@@ -409,17 +419,17 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
       <table>
         <thead><tr><th>パッケージ</th><th>役割</th><th>主なファイル</th><th>行数</th></tr></thead>
         <tbody>
-          <tr><td class="pk">ui</td><td>Compose の 3 画面、地図（ルートと向きを含む）、発言カード、雰囲気の配色と絵、ViewModel</td><td class="files">MainScreen, SettingsScreen, SpotMap, Heading, MoodScene, MainViewModel</td><td><div class="loc"><span class="bar" style="width:96px"></span>2,200</div></td></tr>
-          <tr><td class="pk">companion</td><td>散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定</td><td class="files">WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient</td><td><div class="loc"><span class="bar" style="width:28px"></span>641</div></td></tr>
-          <tr><td class="pk">data</td><td>Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート</td><td class="files">OverpassClient, SpotRepository, SpotPhotos, RouteClient</td><td><div class="loc"><span class="bar" style="width:27px"></span>617</div></td></tr>
-          <tr><td class="pk">sound</td><td>背景音の選択・その場での合成・再生</td><td class="files">Soundscape, Voices, AmbientPlayer</td><td><div class="loc"><span class="bar" style="width:19px"></span>436</div></td></tr>
-          <tr><td class="pk">walk</td><td>散策モードのフォアグラウンドサービス。いつ何を話すかを決める</td><td class="files">WalkService</td><td><div class="loc"><span class="bar" style="width:18px"></span>408</div></td></tr>
-          <tr><td class="pk">guide</td><td>AI サービスの抽象と実装、スポット解説とキャッシュ、TTS</td><td class="files">GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker</td><td><div class="loc"><span class="bar" style="width:15px"></span>349</div></td></tr>
-          <tr><td class="pk">settings</td><td>設定の保存、API キーの暗号化、話しかけの頻度、しきい値</td><td class="files">SettingsRepository, KeyCipher, TalkLevel, Threshold</td><td><div class="loc"><span class="bar" style="width:11px"></span>258</div></td></tr>
-          <tr><td class="pk">mood</td><td>雰囲気のモデル、場所の種類の推定、現在の雰囲気</td><td class="files">Mood, PlaceGuess, MoodSource</td><td><div class="loc"><span class="bar" style="width:8px"></span>186</div></td></tr>
-          <tr><td class="pk">history</td><td>散歩の記録（端末内 JSON、最新 500 件）と再訪の判定</td><td class="files">HistoryStore</td><td><div class="loc"><span class="bar" style="width:8px"></span>173</div></td></tr>
-          <tr><td class="pk">prompt</td><td>プロンプトファイルの読み込みと変数の埋め込み</td><td class="files">PromptTemplates, Prompts</td><td><div class="loc"><span class="bar" style="width:6px"></span>132</div></td></tr>
-          <tr><td class="pk">(root)</td><td>共有部品の生成、通知チャンネルの登録</td><td class="files">SanpoApp</td><td><div class="loc"><span class="bar" style="width:4px"></span>92</div></td></tr>
+          <tr><td class="pk">ui</td><td>Compose の 3 画面、地図（種類の切り替え・ルート・向きを含む）、発言カード、雰囲気の配色と絵、ViewModel</td><td class="files">MainScreen, SettingsScreen, SpotMap, MapTiles, Heading, MoodScene, MainViewModel</td><td><div class="loc"><span class="bar" style="width:96px"></span>2,438</div></td></tr>
+          <tr><td class="pk">data</td><td>Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート、Google の地図タイルのセッションと出典</td><td class="files">OverpassClient, SpotRepository, SpotPhotos, RouteClient, GoogleMapTiles</td><td><div class="loc"><span class="bar" style="width:28px"></span>721</div></td></tr>
+          <tr><td class="pk">companion</td><td>散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定</td><td class="files">WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient</td><td><div class="loc"><span class="bar" style="width:25px"></span>641</div></td></tr>
+          <tr><td class="pk">sound</td><td>背景音の選択・その場での合成・再生</td><td class="files">Soundscape, Voices, AmbientPlayer</td><td><div class="loc"><span class="bar" style="width:17px"></span>436</div></td></tr>
+          <tr><td class="pk">walk</td><td>散策モードのフォアグラウンドサービス。いつ何を話すかを決める</td><td class="files">WalkService</td><td><div class="loc"><span class="bar" style="width:16px"></span>408</div></td></tr>
+          <tr><td class="pk">guide</td><td>AI サービスの抽象と実装、スポット解説とキャッシュ、TTS</td><td class="files">GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker</td><td><div class="loc"><span class="bar" style="width:14px"></span>349</div></td></tr>
+          <tr><td class="pk">settings</td><td>設定の保存、API キーの暗号化、話しかけの頻度、しきい値、地図の種類</td><td class="files">SettingsRepository, KeyCipher, TalkLevel, Threshold, MapStyle</td><td><div class="loc"><span class="bar" style="width:12px"></span>293</div></td></tr>
+          <tr><td class="pk">mood</td><td>雰囲気のモデル、場所の種類の推定、現在の雰囲気</td><td class="files">Mood, PlaceGuess, MoodSource</td><td><div class="loc"><span class="bar" style="width:7px"></span>186</div></td></tr>
+          <tr><td class="pk">history</td><td>散歩の記録（端末内 JSON、最新 500 件）と再訪の判定</td><td class="files">HistoryStore</td><td><div class="loc"><span class="bar" style="width:7px"></span>173</div></td></tr>
+          <tr><td class="pk">prompt</td><td>プロンプトファイルの読み込みと変数の埋め込み</td><td class="files">PromptTemplates, Prompts</td><td><div class="loc"><span class="bar" style="width:5px"></span>132</div></td></tr>
+          <tr><td class="pk">(root)</td><td>共有部品の生成、通知チャンネルの登録</td><td class="files">SanpoApp</td><td><div class="loc"><span class="bar" style="width:4px"></span>94</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -443,6 +453,7 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
           <tr><td>AI サービスを追加する</td><td>OpenAI 互換なら <code>guide/Provider.kt</code> に 1 行。独自 API なら <code>LlmClient</code> を実装して <code>GuideRepository.createClient</code> に分岐を足す</td></tr>
           <tr><td>検索するスポットの種類を変える</td><td><code>data/OverpassClient.kt</code></td></tr>
           <tr><td>地図のルート表示（対象・再検索の条件）を変える</td><td><code>ui/MainViewModel.kt</code> の <code>updateRoute()</code>。経路サービスは <code>data/RouteClient.kt</code></td></tr>
+          <tr><td>地図の種類を追加・変更する</td><td><code>settings/MapStyle.kt</code>（設定の選択肢）・<code>ui/MapTiles.kt</code>（地図画像の URL と出典）。Google は <code>data/GoogleMapTiles.kt</code></td></tr>
           <tr><td>地図の向きの表示を変える</td><td><code>ui/Heading.kt</code>（向きの取得）・<code>ui/SpotMap.kt</code>（描画）</td></tr>
           <tr><td>AI に送る位置情報を変える</td><td><code>guide/GuidePrompt.kt</code>・<code>companion/WalkCompanion.kt</code>（設定 <code>shareLocationWithAi</code> で切り替え）</td></tr>
           <tr><td>配色・絵・背景音の選び方を変える</td><td><code>ui/MoodTheme.kt</code>・<code>ui/MoodScene.kt</code>・<code>sound/Soundscape.kt</code></td></tr>

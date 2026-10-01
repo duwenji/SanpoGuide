@@ -1,7 +1,9 @@
 package com.example.sanpoguide.ui
 
+import com.example.sanpoguide.R
 import com.example.sanpoguide.data.FacilityKind
 import com.example.sanpoguide.data.Poi
+import com.example.sanpoguide.settings.GoogleMapType
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,6 +67,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,6 +97,8 @@ fun MainScreen(
     val nearestFacilities by viewModel.nearestFacilities.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val route by viewModel.route.collectAsStateWithLifecycle()
+    val map by viewModel.map.collectAsStateWithLifecycle()
+    val googleCopyright by viewModel.googleCopyright.collectAsStateWithLifecycle()
     val mood by viewModel.mood.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -150,11 +155,13 @@ fun MainScreen(
                     )
                 }
             }
+            map.notice?.let { Banner(it, onOpenSettings) }
             if (nearestFacilities.isNotEmpty()) {
                 FacilityBar(nearestFacilities, onClick = { viewModel.focus(it.facility) })
             }
             Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                 SpotMap(
+                    tiles = map.tiles,
                     location = location,
                     heading = rememberHeading(location),
                     spots = spots,
@@ -162,9 +169,13 @@ fun MainScreen(
                     route = route,
                     focus = focus,
                     onSpotClick = viewModel::select,
+                    onViewportChanged = viewModel::onMapViewport,
                     modifier = Modifier.fillMaxSize(),
                 )
                 route?.let { RouteLabel(it, onClear = viewModel::clearRoute, modifier = Modifier.align(Alignment.TopStart)) }
+                (map.tiles as? MapTiles.Google)?.let { tiles ->
+                    GoogleAttribution(tiles, googleCopyright, Modifier.align(Alignment.BottomStart).fillMaxWidth())
+                }
             }
             // The list is sorted by distance; when the nearest spot changes, show it again
             // instead of staying anchored to an item that has drifted down the list.
@@ -189,6 +200,38 @@ fun MainScreen(
                 spot = spot,
                 onSpeak = { text -> viewModel.speak(spot.item.poi, text) },
                 onStop = viewModel::stopSpeaking,
+            )
+        }
+    }
+}
+
+/**
+ * Required while Google tiles are shown (Map Tiles API policies): the Google Maps logo,
+ * unmodified, 16–19dp tall with clear space around it, and the attribution for the area in full.
+ * The outlined logo is the one for busy backgrounds like a map; light outline on the road map,
+ * dark on photos.
+ */
+@Composable
+private fun GoogleAttribution(tiles: MapTiles.Google, copyright: String?, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Image(
+            painterResource(
+                if (tiles.type == GoogleMapType.SATELLITE) R.drawable.google_maps_logo_dark_outline
+                else R.drawable.google_maps_logo_light_outline,
+            ),
+            contentDescription = "Google マップ",
+            modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 5.dp).height(18.dp),
+        )
+        Spacer(Modifier.weight(1f))
+        copyright?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF202124),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .background(Color.White.copy(alpha = 0.75f))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
     }

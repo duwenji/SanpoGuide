@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import com.example.sanpoguide.companion.WalkCompanion
 import com.example.sanpoguide.companion.CompanionFeed
 import com.example.sanpoguide.companion.WeatherClient
+import com.example.sanpoguide.data.GoogleMapTiles
 import com.example.sanpoguide.data.OverpassClient
 import com.example.sanpoguide.data.RouteClient
 import com.example.sanpoguide.data.SpotPhotos
@@ -47,6 +48,7 @@ class SanpoApp : Application() {
         private set
     val weather = WeatherClient()
     val routes = RouteClient()
+    val googleTiles = GoogleMapTiles()
     val feed = CompanionFeed()
 
     override fun onCreate() {

@@ -35,6 +35,9 @@ data class GuideSettings(
      * Off by default: without it the AI gets names, distances and figures only.
      */
     val shareLocationWithAi: Boolean = false,
+    val mapStyle: MapStyle = MapStyle.GSI_STANDARD,
+    /** The user's own Google Maps Platform key (Map Tiles API), for the Google map styles. */
+    val googleMapsApiKey: String = "",
 ) {
     fun apiKey(p: Provider = provider): String = apiKeys[p].orEmpty()
     fun model(p: Provider = provider): String = models[p]?.takeIf { it.isNotBlank() } ?: p.defaultModel
@@ -45,7 +48,7 @@ data class GuideSettings(
             (provider == Provider.CLAUDE || baseUrl().isNotBlank())
 }
 
-/** Persists [GuideSettings]; API keys are stored encrypted with [KeyCipher]. */
+/** Persists [GuideSettings]; API keys (AI and Google Maps) are stored encrypted with [KeyCipher]. */
 class SettingsRepository(context: Context) {
     private val prefs = context.getSharedPreferences("guide_settings", Context.MODE_PRIVATE)
 
@@ -64,6 +67,9 @@ class SettingsRepository(context: Context) {
             putBoolean(KEY_SPOT_PHOTOS, settings.spotPhotos)
             putBoolean(KEY_PHOTOS_ON_MOBILE, settings.photosOnMobileData)
             putBoolean(KEY_SHARE_LOCATION_WITH_AI, settings.shareLocationWithAi)
+            putString(KEY_MAP_STYLE, settings.mapStyle.name)
+            val mapsKey = settings.googleMapsApiKey.trim()
+            if (mapsKey.isEmpty()) remove(KEY_GOOGLE_MAPS_KEY) else putString(KEY_GOOGLE_MAPS_KEY, KeyCipher.encrypt(mapsKey))
             Provider.entries.forEach { p ->
                 val key = settings.apiKeys[p]?.trim().orEmpty()
                 if (key.isEmpty()) remove(apiKeyPref(p)) else putString(apiKeyPref(p), KeyCipher.encrypt(key))
@@ -107,6 +113,10 @@ class SettingsRepository(context: Context) {
             spotPhotos = prefs.getBoolean(KEY_SPOT_PHOTOS, DEFAULTS.spotPhotos),
             photosOnMobileData = prefs.getBoolean(KEY_PHOTOS_ON_MOBILE, DEFAULTS.photosOnMobileData),
             shareLocationWithAi = prefs.getBoolean(KEY_SHARE_LOCATION_WITH_AI, DEFAULTS.shareLocationWithAi),
+            mapStyle = prefs.getString(KEY_MAP_STYLE, null)
+                ?.let { name -> MapStyle.entries.firstOrNull { it.name == name } }
+                ?: DEFAULTS.mapStyle,
+            googleMapsApiKey = prefs.getString(KEY_GOOGLE_MAPS_KEY, null)?.let(KeyCipher::decrypt).orEmpty(),
         )
     }
 
@@ -125,6 +135,8 @@ class SettingsRepository(context: Context) {
         const val KEY_SPOT_PHOTOS = "spot_photos"
         const val KEY_PHOTOS_ON_MOBILE = "photos_on_mobile"
         const val KEY_SHARE_LOCATION_WITH_AI = "share_location_with_ai"
+        const val KEY_MAP_STYLE = "map_style"
+        const val KEY_GOOGLE_MAPS_KEY = "google_maps_api_key"
         val DEFAULTS = GuideSettings()
     }
 }

@@ -13,7 +13,9 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -22,20 +24,16 @@ import androidx.core.content.ContextCompat
 import com.example.sanpoguide.R
 import com.example.sanpoguide.data.Facility
 import com.example.sanpoguide.data.FacilityKind
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.events.DelayedMapListener
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import kotlin.math.roundToInt
-
-/** GSI (Geospatial Information Authority of Japan) standard map tiles. No API key needed. */
-private val GsiStandard = XYTileSource(
-    "GSI_std", 5, 18, 256, ".png",
-    arrayOf("https://cyberjapandata.gsi.go.jp/xyz/std/"),
-    "出典：国土地理院",
-)
 
 /** Marker for each facility kind; the colors double as the legend in the nearest-facilities bar. */
 fun facilityDot(kind: FacilityKind) = when (kind) {
@@ -61,9 +59,12 @@ fun facilityColor(kind: FacilityKind) = when (kind) {
 /**
  * Map showing the user's position (with the way they face, [heading]), nearby spots and
  * amenities, and the way to the spot being guided to. Pans to [focus] when it changes.
+ * [onViewportChanged] reports the area on screen (zoom, north, south, east, west) once the
+ * map settles, for attributions that depend on it.
  */
 @Composable
 fun SpotMap(
+    tiles: MapTiles,
     location: Location?,
     heading: Float?,
     spots: List<SpotItem>,
@@ -71,6 +72,7 @@ fun SpotMap(
     route: RouteToSpot?,
     focus: Facility?,
     onSpotClick: (SpotItem) -> Unit,
+    onViewportChanged: (zoom: Int, north: Double, south: Double, east: Double, west: Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -78,11 +80,22 @@ fun SpotMap(
     val spotIcon = remember { ContextCompat.getDrawable(context, R.drawable.spot_dot) }
     val meIcon = remember { ContextCompat.getDrawable(context, R.drawable.me_dot) }
     val facilityIcons = remember { FacilityKind.entries.associateWith { ContextCompat.getDrawable(context, facilityDot(it)) } }
+    val reportViewport by rememberUpdatedState(onViewportChanged)
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(GsiStandard)
             setMultiTouchControls(true)
             controller.setZoom(17.0)
+            addMapListener(DelayedMapListener(object : MapListener {
+                override fun onScroll(event: ScrollEvent?): Boolean {
+                    reportViewportOf(this@apply, reportViewport)
+                    return false
+                }
+
+                override fun onZoom(event: ZoomEvent?): Boolean {
+                    reportViewportOf(this@apply, reportViewport)
+                    return false
+                }
+            }, VIEWPORT_SETTLE_MS))
         }
     }
     val copyright = remember { CopyrightOverlay(context) }
@@ -97,6 +110,12 @@ fun SpotMap(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier) { map ->
+        if (tiles != markers.tiles) {
+            map.setTileSource(tiles.tileSource())
+            markers.tiles = tiles
+            // The new tiles may need an attribution for the area already on screen.
+            map.post { reportViewportOf(map, reportViewport) }
+        }
         // Distances change with every location update; the markers only when the places do,
         // so a bubble the user opened stays open while they walk.
         // Sets: the lists are sorted by distance, so walking reorders them without changing them.
@@ -166,7 +185,8 @@ fun SpotMap(
             map.controller.animateTo(GeoPoint(focus.lat, focus.lon))
             focusedOn[0] = focus
         }
-        map.overlays += copyright
+        // Google's attribution changes with the area and comes with its logo; the screen draws both.
+        if (tiles !is MapTiles.Google) map.overlays += copyright
         map.invalidate()
     }
 }
@@ -181,6 +201,7 @@ private class MapMarkers {
     var onSpotClick: (SpotItem) -> Unit = {}
     var me: Marker? = null
     var route: Polyline? = null
+    var tiles: MapTiles? = null
     private val headingIcons = HashMap<Int, Drawable>()
 
     /** The position dot with a beam toward [degrees]; one per [HEADING_STEP] degrees, made on first use. */
@@ -191,6 +212,16 @@ private class MapMarkers {
 }
 
 private const val HEADING_STEP = 5
+/** Wait until panning or zooming pauses before asking for the attribution of the new area. */
+private const val VIEWPORT_SETTLE_MS = 600L
+
+private fun reportViewportOf(
+    map: MapView, report: (zoom: Int, north: Double, south: Double, east: Double, west: Double) -> Unit,
+) {
+    if (map.width == 0 || map.height == 0) return
+    val box = map.boundingBox
+    report(map.zoomLevelDouble.toInt(), box.latNorth, box.latSouth, box.lonEast, box.lonWest)
+}
 private const val ROUTE_COLOR = 0xCC1E88E5.toInt()
 
 /** Same dot as `me_dot`, with a fading beam behind it. Canvas rotation is clockwise, like compass degrees. */
