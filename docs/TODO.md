@@ -229,6 +229,8 @@ ADR-001 と API-002 は 2026-10-03 に承認した（同日、1.1 の改訂も�
 - [ ] ルート鍵と署名鍵の手順（ADR-001 T-3）
 - [ ] 審査用の道具（パッケージの機械チェック、場面ごとの見本の書き出し）
 - [ ] API-002 の準拠テスト（確認観点 V-01〜V-09・V-15・V-16）。sanpo-channel-console に置く
+- [x] プロンプト・`PromptTemplates`・組み込みのチャンネルを `:station-format` に移し、審査の見本（`ReviewSamples`）を足した。GitHub Packages に `com.example.sanpoguide:station-format` として公開する（2026-10-03、[RFC-001](refactoring/RFC-001-prompts-to-station-format.md)）
+- [ ] `:station-format` に ZIP の展開と配信元の署名の確認（API-003 の手順 2・4）を足す（RFC-001 未決事項 No.1）
 - [ ] アプリ: リストの要約の確認（API-002 P-8）と、配信元の鍵の移し替えの受け入れ（P-9）を、提供元の実装（ADR-001 T-5）に含める
 
 決めたこと（2026-10-03）:

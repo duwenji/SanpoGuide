@@ -6,11 +6,16 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 // the checks the app runs and render exactly the prompts it sends.
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    `maven-publish`
 }
+
+group = "com.example.sanpoguide"
+version = providers.gradleProperty("stationFormatVersion").get()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
 }
 
 kotlin {
@@ -50,3 +55,31 @@ sourceSets.main {
     resources.srcDir(channelIndex)
 }
 
+// Published to GitHub Packages for the channel management system (sanpo-channel-console,
+// ADR-001 T-4). Users add org.json themselves (see the dependency note above).
+publishing {
+    publications {
+        create<MavenPublication>("stationFormat") {
+            artifactId = "station-format"
+            from(components["java"])
+            pom {
+                name.set("SanpoGuide station-format")
+                description.set(
+                    "SanpoGuide channel package format (API-003): checks, PromptTemplates, the app's prompts " +
+                        "and the built-in channels. Requires org.json on the classpath.",
+                )
+                url.set("https://github.com/duwenji/SanpoGuide")
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/duwenji/SanpoGuide")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
