@@ -61,8 +61,8 @@ class SanpoApp : Application() {
 
         settings = SettingsRepository(this)
         spots = SpotRepository(OverpassClient())
-        prompts = Prompts.fromAssets(assets)
-        stations = StationRepository(BuiltInStations.fromAssets(assets), settings.settings, appScope)
+        prompts = Prompts.fromResources()
+        stations = StationRepository(BuiltInStations.load(), settings.settings, appScope)
         guides = GuideRepository(settings, prompts, station = { stations.current.value })
         speaker = Speaker(this)
         photos = SpotPhotos(this)

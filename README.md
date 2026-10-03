@@ -185,9 +185,9 @@ keytool -genkeypair -v -keystore release.jks -alias sanpoguide -keyalg RSA -keys
 | `walk` | 散策モードのフォアグラウンドサービス。位置の追跡と「いつ何を話すか」の判断（`WalkService`） |
 | `ui` | Compose の画面（メイン・記録・設定）、発言カード、チャンネルの選択（`StationPicker`）、地図、雰囲気の配色（`MoodTheme`）と絵（`MoodScene`）、ViewModel |
 
-チャンネルの形式（[docs/channel-package-format.md](docs/channel-package-format.md)）の読み込みと確認は、Android に依存しない別モジュール `station-format/`（`:station-format`）にある。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。構造の図は [docs/architecture.md](docs/architecture.md)。
+チャンネルの形式（[docs/channel-package-format.md](docs/channel-package-format.md)）の読み込みと確認、プロンプトのファイル、組み込みのチャンネルは、Android に依存しない別モジュール `station-format/`（`:station-format`）にある。チャンネル管理システムも同じものを使うため、GitHub Packages に公開している（`com.example.sanpoguide:station-format`。版は `gradle.properties` の `stationFormatVersion`、公開はタグ `station-format-v<版>`）。構造の図は [docs/architecture.md](docs/architecture.md)。
 
-AI に送るプロンプトと定型文は、コードではなく `app/src/main/assets/prompts/` のファイル（と、チャンネルの `assets/channels/{id}/prompts/`）にある。一覧・使う場面・書き方・変数は [docs/prompts.md](docs/prompts.md) を参照。
+AI に送るプロンプトと定型文は、コードではなく `station-format/src/main/resources/sanpoguide/prompts/` のファイル（と、チャンネルの `sanpoguide/channels/{id}/prompts/`）にある。一覧・使う場面・書き方・変数は [docs/prompts.md](docs/prompts.md) を参照。
 
 AI サービスを追加する場合、OpenAI 互換なら `Provider` に1行追加するだけでよい。独自 API の場合は `LlmClient` を実装し、`GuideRepository.createClient` に分岐を足す。
 

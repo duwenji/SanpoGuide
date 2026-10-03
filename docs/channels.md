@@ -135,8 +135,8 @@ API-003 で `format: 1` にすべての種類を定め、アプリは次の段�
 | 置き場所 | 内容 |
 |---|---|
 | 新しい Gradle モジュール `:station-format`（JVM のライブラリ、Android に依存しない） | `channel.json` の読み込み（`StationManifest`）、API-003 の確認（`StationValidator`）、署名の確認、エラーコード。チャンネル管理システムの審査用の道具でも、そのまま使う |
-| `app` の `station/` | `Station`（設定値とスロットの読み込み）、`BuiltInStations`（`assets/channels/` の読み込み）、`StationRepository`（選んでいるチャンネル・カスタマイズ・移行）、プロンプトの振り分け |
-| `app` の `assets/channels/{id}/` | 組み込みのチャンネル（API-003 の構成。`signature.json` なし） |
+| `app` の `station/` | `Station`（設定値とスロットの読み込み）、`BuiltInStations`（`:station-format` の `BuiltInChannels` を `Station` にする）、`StationRepository`（選んでいるチャンネル・カスタマイズ・移行）、プロンプトの振り分け |
+| `:station-format` の `sanpoguide/channels/{id}/` | 組み込みのチャンネル（API-003 の構成。`signature.json` なし）。2026-10-03 に `app` の `assets/channels/` から移した |
 | 変更する既存のコード | `WalkService`（話す処理）、`WalkCompanion`・`GuideRepository`・`GuidePrompt`（プロンプト・キャッシュ）、`SettingsRepository`（移行）、`HistoryStore`（記録）、`MainScreen`・`SettingsScreen`（選択・カスタマイズ）、`Soundscape`（`mood.sound` の固定） |
 
 ## テスト

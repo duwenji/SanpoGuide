@@ -23,14 +23,14 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The built-in channels under `src/main/assets/channels/` (docs/channel-package-format.md,
+ * The built-in channels under `station-format/src/main/resources/sanpoguide/channels/` (docs/channel-package-format.md,
  * 確認観点 V-01・V-02・V-09). Rendered system prompts go to `build/prompt-samples/channels/`.
  */
 class StationAssetsTest {
-    private val prompts = PromptTemplates { name -> File("src/main/assets/prompts/$name.md").readText() }
+    private val prompts = PromptTemplates { name -> File("../station-format/src/main/resources/sanpoguide/prompts/$name.md").readText() }
 
     // Loading runs the same checks as the app does at start-up and fails on any rejection (V-01).
-    private val stations = BuiltInStations.load { id -> DirectoryStationFiles(File("src/main/assets/channels/$id")) }
+    private val stations = BuiltInStations.load { id -> DirectoryStationFiles(File("../station-format/src/main/resources/sanpoguide/channels/$id")) }
     private val standard = stations.first { it.manifest.id == BuiltInStations.STANDARD }
 
     private fun baseline(name: String): String =
@@ -38,7 +38,7 @@ class StationAssetsTest {
 
     @Test
     fun `every built-in channel is in its folder and listed`() {
-        val folders = File("src/main/assets/channels").listFiles()!!.filter { it.isDirectory }.map { it.name }.sorted()
+        val folders = File("../station-format/src/main/resources/sanpoguide/channels").listFiles()!!.filter { it.isDirectory }.map { it.name }.sorted()
         assertEquals(folders, BuiltInStations.IDS.sorted())
         assertEquals(BuiltInStations.IDS, stations.map { it.manifest.id })
     }

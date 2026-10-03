@@ -156,11 +156,11 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
         <text class="lbl left" x="760" y="280">onCreate() で生成・共有</text>
 
         <!-- band C row 1 -->
-        <rect class="bx" x="116" y="296" width="160" height="72" rx="8"/><text class="tm" x="196" y="318" style="fill:var(--accent)">prompt</text><text class="sm" x="196" y="338">PromptTemplates</text><text class="sm" x="196" y="355">← assets/prompts/</text>
+        <rect class="bx" x="116" y="296" width="160" height="72" rx="8"/><text class="tm" x="196" y="318" style="fill:var(--accent)">prompt</text><text class="sm" x="196" y="338">PromptTemplates</text><text class="sm" x="196" y="355">← sanpoguide/prompts/</text>
         <rect class="bx" x="288" y="296" width="160" height="72" rx="8"/><text class="tm" x="368" y="318" style="fill:var(--accent)">history</text><text class="sm" x="368" y="338">HistoryStore</text><text class="s" x="368" y="355">端末内の JSON</text>
         <rect class="bx" x="460" y="296" width="160" height="72" rx="8"/><text class="tm" x="540" y="318" style="fill:var(--accent)">settings</text><text class="sm" x="540" y="338">SettingsRepository</text><text class="sm" x="540" y="355">KeyCipher · Threshold</text>
         <rect class="bx" x="632" y="296" width="160" height="72" rx="8"/><text class="tm" x="712" y="318" style="fill:var(--accent)">mood</text><text class="sm" x="712" y="338">MoodSource · Mood</text><text class="sm" x="712" y="355">PlaceGuess</text>
-        <rect class="bx-acc" x="804" y="296" width="160" height="72" rx="8"/><text class="tm" x="884" y="318" style="fill:var(--accent)">station</text><text class="sm" x="884" y="338">StationRepository</text><text class="sm" x="884" y="355">← assets/channels/</text>
+        <rect class="bx-acc" x="804" y="296" width="160" height="72" rx="8"/><text class="tm" x="884" y="318" style="fill:var(--accent)">station</text><text class="sm" x="884" y="338">StationRepository</text><text class="sm" x="884" y="355">← sanpoguide/channels/</text>
         <!-- band C row 2 -->
         <rect class="bx" x="116" y="392" width="200" height="72" rx="8"/><text class="tm" x="216" y="414" style="fill:var(--accent)">data</text><text class="sm" x="216" y="434">SpotRepository</text><text class="sm" x="216" y="451">Overpass · Photos · Route</text>
         <rect class="bx" x="328" y="392" width="200" height="72" rx="8"/><text class="tm" x="428" y="414" style="fill:var(--accent)">guide</text><text class="sm" x="428" y="434">GuideRepository · Speaker</text><text class="sm" x="428" y="451">LlmClient · Provider</text>
@@ -232,7 +232,7 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
         <text class="sm" x="645" y="128">GuideRepository.guideFor()</text>
         <text class="s" x="645" y="154">それ以外（再訪を含む）</text>
         <text class="sm" x="645" y="170">WalkCompanion.say()</text>
-        <text class="s" x="645" y="196">文面は assets/prompts/ とチャンネルから</text>
+        <text class="s" x="645" y="196">文面は sanpoguide/prompts/ とチャンネルから</text>
 
         <!-- generators -->
         <line class="ar" x1="760" y1="100" x2="808" y2="100" marker-end="url(#a2)"/>
@@ -421,12 +421,12 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
     </div>
     <figure>
       <div class="scroll">
-      <svg viewBox="0 0 1000 300" role="img" aria-label="assets/channels の組み込みのチャンネルを BuiltInStations と StationValidator が確認して読み込み、StationRepository が設定の選択と利用者の変更を重ねて現在のチャンネルを作る。現在のチャンネルは GuideRepository、WalkCompanion、WalkService、画面が使う。第三者のチャンネルは計画中。">
+      <svg viewBox="0 0 1000 300" role="img" aria-label=":station-format の sanpoguide/channels の組み込みのチャンネルを BuiltInChannels と StationValidator が確認して読み込み、StationRepository が設定の選択と利用者の変更を重ねて現在のチャンネルを作る。現在のチャンネルは GuideRepository、WalkCompanion、WalkService、画面が使う。第三者のチャンネルは計画中。">
         <defs>
           <marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
         </defs>
         <!-- inputs -->
-        <rect class="bx" x="20" y="20" width="200" height="56" rx="8"/><text class="tm" x="120" y="43">assets/channels/</text><text class="s" x="120" y="62">channel.json・prompts/（4 本）</text>
+        <rect class="bx" x="20" y="20" width="200" height="56" rx="8"/><text class="tm" x="120" y="43">sanpoguide/channels/</text><text class="s" x="120" y="62">channel.json・prompts/（4 本）</text>
         <rect class="bx-ext" x="20" y="100" width="200" height="56" rx="8"/><text class="te" x="120" y="123">第三者のチャンネル</text><text class="s" x="120" y="142">API-002 のリスト（計画中）</text>
         <rect class="bx" x="20" y="200" width="200" height="56" rx="8"/><text class="t" x="120" y="223">設定</text><text class="sm" x="120" y="242">stationId · stationOverrides</text>
         <!-- check -->
@@ -489,7 +489,7 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
         </tbody>
       </table>
     </div>
-    <p>チャンネルの形式（API-003）の読み込みと確認は、Android に依存しない別のモジュール <code>:station-format</code>（<code>station-format/</code>、4 ファイル・341 行）にあります。チャンネル管理システムの審査用の道具でも同じ確認を使うためです。組み込みのチャンネルの文章は <code>app/src/main/assets/channels/</code> にあります。</p>
+    <p>チャンネルの形式（API-003）の読み込みと確認、プロンプトのファイルと <code>PromptTemplates</code>・<code>StationPrompts</code>、組み込みのチャンネルは、Android に依存しない別のモジュール <code>:station-format</code>（<code>station-format/</code>）にあります。チャンネル管理システムの審査用の道具でも、同じ確認と同じプロンプトを使うためです（GitHub Packages に公開）。ファイルは <code>station-format/src/main/resources/sanpoguide/</code> にあり、アプリはクラスパスから読みます。</p>
   </section>
 
   <!-- where to change -->
@@ -502,9 +502,9 @@ td.files{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
       <table>
         <thead><tr><th>やりたいこと</th><th>最初に開くファイル</th></tr></thead>
         <tbody>
-          <tr><td>話しかけ・解説の文面を変える</td><td>枠は <code>assets/prompts/</code>（一覧は <code>docs/prompts.md</code>）、役割や話題はチャンネルの <code>assets/channels/{id}/prompts/</code></td></tr>
+          <tr><td>話しかけ・解説の文面を変える</td><td>枠は <code>sanpoguide/prompts/</code>（一覧は <code>docs/prompts.md</code>）、役割や話題はチャンネルの <code>sanpoguide/channels/{id}/prompts/</code></td></tr>
           <tr><td>話す条件や優先順位を変える</td><td><code>walk/WalkService.kt</code> の <code>maybeTalk()</code>。スポットの選び方は <code>companion/SpotChooser.kt</code></td></tr>
-          <tr><td>組み込みのチャンネルを追加・変更する</td><td><code>assets/channels/{id}/</code>（形式は <code>docs/channel-package-format.md</code>）と、<code>station/BuiltInStations.kt</code> の <code>IDS</code></td></tr>
+          <tr><td>組み込みのチャンネルを追加・変更する</td><td><code>sanpoguide/channels/{id}/</code>（形式は <code>docs/channel-package-format.md</code>）と、<code>BuiltInChannels.kt</code> の <code>IDS</code></td></tr>
           <tr><td>チャンネルの形式の確認を変える</td><td><code>station-format/</code>（<code>StationValidator</code>）。形式そのものを変えるときは API-003 も</td></tr>
           <tr><td>チャンネルの設定画面の項目を変える</td><td><code>ui/SettingsScreen.kt</code> の <code>StationSettings</code>・<code>ui/SettingsViewModel.kt</code>、保存は <code>settings/SettingsRepository.kt</code></td></tr>
           <tr><td>距離・時間・気温などの既定値を変える</td><td><code>settings/Threshold.kt</code></td></tr>

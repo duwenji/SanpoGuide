@@ -5,3 +5,8 @@ gradlew text eol=lf
 *.jar binary
 *.png binary
 *.apk binary
+# Channel packages and prompts must be LF: the channel format (API-003) rejects CR, and the
+# app ships these files byte for byte. Without this, a Windows checkout with core.autocrlf=true
+# builds an APK whose built-in channels fail their own checks.
+app/src/main/assets/** text eol=lf
+station-format/src/main/resources/** text eol=lf
