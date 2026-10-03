@@ -12,6 +12,8 @@ import com.example.sanpoguide.mood.Season
 import com.example.sanpoguide.mood.TimeOfDay
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
+import com.example.sanpoguide.station.Station
+import com.example.sanpoguide.station.format.TalkEventKind
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -34,12 +36,15 @@ sealed interface TalkEvent {
  * weather, this walk, past walks) into one short, natural line.
  *
  * This class only gathers the values; all wording is in the prompt files under
- * `assets/prompts/companion/` and `assets/prompts/fallback/companion/`.
+ * `assets/prompts/companion/` and `assets/prompts/fallback/companion/`, plus the slots of the
+ * channel in use.
  */
 class WalkCompanion(
     private val guides: GuideRepository,
     private val history: HistoryStore,
     private val prompts: PromptTemplates,
+    /** The channel in use; its slots fill the system prompt and add to the event prompts. */
+    private val station: () -> Station,
     /** The current mood for the companion's tone, or null when the user has turned moods off. */
     private val mood: () -> Mood? = { null },
     /** Whether the user allows coordinates to go to the AI (off by default). */
@@ -50,9 +55,13 @@ class WalkCompanion(
         val eventVars = eventVars(event)
         val fallback = prompts.render(Prompts.Fallback.companion(kind), fallbackVars(event, session, eventVars))
         return try {
+            val channel = station()
+            val extra = stationEventOf(kind)?.let(channel::eventInstructions)
+                ?.let { "\n\n" + prompts.render(Prompts.Talk.STATION_EVENT, mapOf("text" to it)) }
+                .orEmpty()
             val user = prompts.render(Prompts.Talk.SITUATION, situationVars(event, session, weather)) +
-                "\n\n" + prompts.render(Prompts.event(kind), eventVars)
-            guides.chat(prompts.render(Prompts.Talk.SYSTEM), user)
+                "\n\n" + prompts.render(Prompts.event(kind), eventVars) + extra
+            guides.chat(prompts.render(Prompts.Talk.SYSTEM, channel.companionSystemVars()), user)
                 ?.takeIf { it.isNotBlank() }
                 ?: fallback
         } catch (e: Exception) {
@@ -70,6 +79,16 @@ class WalkCompanion(
         is TalkEvent.WeatherTurn -> Prompts.Event.WEATHER_CHANGE
         is TalkEvent.NearFacility -> Prompts.Event.FACILITY
         is TalkEvent.Finish -> Prompts.Event.FINISH
+    }
+
+    /** The events a channel may add instructions to; the safety ones (weather, sunset, amenities) take none. */
+    private fun stationEventOf(kind: Prompts.Event): TalkEventKind? = when (kind) {
+        Prompts.Event.START -> TalkEventKind.START
+        Prompts.Event.REVISIT -> TalkEventKind.REVISIT
+        Prompts.Event.MILESTONE -> TalkEventKind.MILESTONE
+        Prompts.Event.REST -> TalkEventKind.REST
+        Prompts.Event.FINISH -> TalkEventKind.FINISH
+        Prompts.Event.SUNSET, Prompts.Event.WEATHER_CHANGE, Prompts.Event.FACILITY -> null
     }
 
     /** Variables for `companion/situation` (documented at the top of that file). */

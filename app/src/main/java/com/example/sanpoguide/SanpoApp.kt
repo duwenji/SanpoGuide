@@ -17,6 +17,8 @@ import com.example.sanpoguide.history.HistoryStore
 import com.example.sanpoguide.mood.MoodSource
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
+import com.example.sanpoguide.station.BuiltInStations
+import com.example.sanpoguide.station.StationRepository
 import com.example.sanpoguide.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +35,8 @@ class SanpoApp : Application() {
     lateinit var settings: SettingsRepository
         private set
     lateinit var spots: SpotRepository
+        private set
+    lateinit var stations: StationRepository
         private set
     lateinit var guides: GuideRepository
         private set
@@ -58,14 +62,16 @@ class SanpoApp : Application() {
         settings = SettingsRepository(this)
         spots = SpotRepository(OverpassClient())
         prompts = Prompts.fromAssets(assets)
-        guides = GuideRepository(settings, prompts)
+        stations = StationRepository(BuiltInStations.fromAssets(assets), settings.settings, appScope)
+        guides = GuideRepository(settings, prompts, station = { stations.current.value })
         speaker = Speaker(this)
         photos = SpotPhotos(this)
         history = HistoryStore(this)
         mood = MoodSource(spots, feed.weather, appScope)
         companion = WalkCompanion(
             guides, history, prompts,
-            mood = { mood.mood.value.takeIf { settings.settings.value.moodEnabled } },
+            station = { stations.current.value },
+            mood = { mood.mood.value.takeIf { stations.current.value.moodTone } },
             shareLocation = { settings.settings.value.shareLocationWithAi },
         )
         appScope.launch { history.load() }

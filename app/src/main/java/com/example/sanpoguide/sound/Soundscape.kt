@@ -4,6 +4,7 @@ import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.mood.Place
 import com.example.sanpoguide.mood.Season
 import com.example.sanpoguide.mood.Sky
+import com.example.sanpoguide.station.format.SoundChoice
 
 /** Background sounds, synthesized on the phone (see [Voices]). */
 enum class Soundscape(val label: String) {
@@ -15,6 +16,17 @@ enum class Soundscape(val label: String) {
     TEMPLE("遠くの鐘");
 
     companion object {
+        /** The channel's choice: a fixed sound, or [AUTO][SoundChoice.AUTO] to follow the mood. */
+        fun of(choice: SoundChoice, mood: Mood): Soundscape = when (choice) {
+            SoundChoice.AUTO -> forMood(mood)
+            SoundChoice.RAIN -> RAIN
+            SoundChoice.WAVES -> WAVES
+            SoundChoice.WIND -> WIND
+            SoundChoice.BIRDS -> BIRDS
+            SoundChoice.INSECTS -> INSECTS
+            SoundChoice.TEMPLE -> TEMPLE
+        }
+
         /**
          * The sound for [mood]: the weather first (rain sounds while it rains), then the place,
          * then the time and season. Thunder plays as plain rain: a made-up rumble could hide or

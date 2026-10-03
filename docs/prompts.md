@@ -10,13 +10,15 @@ AI に送るプロンプトと、AI を使えないときの定型文は、す�
 prompts/
 ├── shared/                    共通部品（ほかのファイルから読み込む）
 │   ├── speech.md                話し方（耳で聞く前提、記号を使わない）
-│   └── facts.md                 事実の扱い（作り話をしない、回数や名前を正確に）
+│   ├── facts.md                 事実の扱い（作り話をしない、回数や名前を正確に）
+│   └── guard.md                 守ること（個人情報を尋ねない・宣伝しない など。どのチャンネルでも外せない）
 ├── guide/                     スポット解説
-│   ├── system.md                システムプロンプト（地元のガイド役）
+│   ├── system.md                システムプロンプトの枠（役割・内容の重点・長さはチャンネルから）
 │   └── user.md                  依頼（スポット名・種別・距離・OSM タグ。設定でオンなら緯度経度も）
 ├── companion/                 散歩の友の話しかけ
-│   ├── system.md                システムプロンプト（散歩仲間の友だち役）
+│   ├── system.md                システムプロンプトの枠（役割・話題の選び方はチャンネルから）
 │   ├── situation.md             いまの状況（日時・天気・雰囲気・今回と過去の散歩・最近の発言。設定でオンなら現在地と経路も）
+│   ├── station_event.md         チャンネルごとの、出来事への追加の指示（チャンネルにあるときだけ）
 │   └── events/                  出来事ごとの指示
 │       ├── start.md               散歩の開始
 │       ├── revisit.md             過去に訪れたスポットへの再訪
@@ -54,9 +56,15 @@ AI に送るのは「システムプロンプト」と「ユーザープロン�
 | 散歩の終了 | `companion/system` | `companion/situation` ＋ `companion/events/finish` | `fallback/companion/finish` |
 | 設定画面の接続テスト | `connection_test/system` | `connection_test/user` | — |
 
-散歩の友のユーザープロンプトは、`companion/situation` の後ろに空行を挟んで出来事のファイルをつなげたもの。
+散歩の友のユーザープロンプトは、`companion/situation` の後ろに空行を挟んで出来事のファイルをつなげたもの。選んでいるチャンネルにその出来事の追加の指示があれば、さらに空行を挟んで `companion/station_event` をつなげる（開始・再訪・区切り・休憩・終了だけ。天気の急変・日の入り・施設にはつかない）。
 
-「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と設定の「話しかけの頻度」（`TalkLevel`）で決まる。施設をどの条件で案内するかは `FacilityAdvisor`、天気の急変の判定は `WeatherChangeDetector` で決まる。
+## チャンネルとの関係
+
+`guide/system` と `companion/system` は枠で、役割・内容の重点・話題の選び方・解説の長さは、選んでいるチャンネルから変数で入る（[channel-package-format.md](channel-package-format.md) のスロット）。チャンネルの文章は `assets/channels/{id}/prompts/` にあり、ないスロットには標準のチャンネル（`assets/channels/standard/`）の文章が入る。話し方・事実の扱い・守ることは、どのチャンネルでも同じ。
+
+今までの文面を変えたいときは、枠の部分なら `prompts/` を、役割や話題なら `assets/channels/standard/prompts/` を直す。標準のチャンネルで組み立てたシステムプロンプトがチャンネル導入前と同じであることを `StationAssetsTest` が確かめているので、意図して文面を変えたときは、基準のファイル（`app/src/test/resources/prompt-baseline/`）も直す。
+
+「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と、選んでいるチャンネルの「話しかけの頻度」（`TalkLevel`）・「話しかける場面」で決まる。施設をどの条件で案内するかは `FacilityAdvisor`、天気の急変の判定は `WeatherChangeDetector` で決まる。
 
 ## 書き方
 
@@ -80,6 +88,9 @@ AI に送るのは「システムプロンプト」と「ユーザープロン�
 
 | ファイル | 変数を作るコード |
 |---|---|
+| `guide/system` | `station/Station.kt`（`guideSystemVars`） |
+| `companion/system` | `station/Station.kt`（`companionSystemVars`） |
+| `companion/station_event` | `companion/WalkCompanion.kt`（`say`。文章は `Station.eventInstructions`） |
 | `guide/user`、`fallback/guide` | `guide/GuidePrompt.kt`（`spotVars` / `fallbackVars`） |
 | `companion/situation` | `companion/WalkCompanion.kt`（`situationVars`） |
 | `companion/events/*` | `companion/WalkCompanion.kt`（`eventVars`） |

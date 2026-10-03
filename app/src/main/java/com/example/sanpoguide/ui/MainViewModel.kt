@@ -22,6 +22,7 @@ import com.example.sanpoguide.history.LatLon
 import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.settings.MapStyle
+import com.example.sanpoguide.station.Station
 import com.example.sanpoguide.walk.WalkService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -82,6 +83,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val settings: StateFlow<GuideSettings> = app.settings.settings
 
     val mood: StateFlow<Mood> = app.mood.mood
+
+    val station: StateFlow<Station> = app.stations.current
+    val stations: List<Station> get() = app.stations.all
+
+    /** Saved at once: mid-walk, the walk service picks the switch up and the new channel says hello. */
+    fun chooseStation(id: String) = app.settings.save(app.settings.settings.value.copy(stationId = id))
 
     val liveWalk: StateFlow<LiveWalk?> = app.feed.live
     val companionLines: StateFlow<List<Utterance>> = app.feed.lines

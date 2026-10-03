@@ -18,6 +18,8 @@ object Prompts {
     object Talk {
         const val SYSTEM = "companion/system"
         const val SITUATION = "companion/situation"
+        /** The channel's extra instructions for an event, appended after the event's prompt. */
+        const val STATION_EVENT = "companion/station_event"
     }
 
     /** One file per walk event, in `companion/events/` and `fallback/companion/`. */

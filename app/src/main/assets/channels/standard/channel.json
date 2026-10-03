@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "standard",
+  "version": 1,
+  "name": "標準",
+  "summary": "いつもの散歩の友。スポットの解説と、状況に合わせた一言",
+  "lang": "ja",
+  "greeting": "いつもの調子で歩きましょう。",
+  "talk": {
+    "level": "normal",
+    "events": { "spot": true, "revisit": true, "milestone": true, "rest": true, "start": true, "finish": true }
+  },
+  "spots": { "prefer": [], "skip": [] },
+  "guide": { "length": "normal" },
+  "mood": { "tone": true, "sound": "auto" }
+}

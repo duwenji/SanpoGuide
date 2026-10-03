@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SanpoGuide"
 include(":app")
+include(":station-format")

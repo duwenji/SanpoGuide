@@ -13,6 +13,12 @@ import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
+import com.example.sanpoguide.station.Station
+import com.example.sanpoguide.station.StationOverrides
+import com.example.sanpoguide.station.format.GuideLength
+import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
+import com.example.sanpoguide.station.format.TalkEventKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +37,10 @@ sealed interface TestState {
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = (application as SanpoApp).settings
     private val prompts = (application as SanpoApp).prompts
+    private val stationRepo = (application as SanpoApp).stations
+
+    /** Every channel, in the order to list them. */
+    val stations: List<Station> = stationRepo.all
 
     private val _draft = MutableStateFlow(repo.settings.value)
     val draft: StateFlow<GuideSettings> = _draft.asStateFlow()
@@ -48,7 +58,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setApiKey(key: String) = edit { it.copy(apiKeys = it.apiKeys + (it.provider to key)) }
     fun setModel(model: String) = edit { it.copy(models = it.models + (it.provider to model)) }
     fun setCustomBaseUrl(url: String) = edit { it.copy(customBaseUrl = url) }
-    fun setTalkLevel(level: TalkLevel) = edit { it.copy(talkLevel = level) }
+    fun selectStation(id: String) = edit { it.copy(stationId = id) }
+
+    /** The chosen channel as the draft would have it, with the user's changes applied. */
+    fun draftStation(settings: GuideSettings): Station = stationRepo.select(settings)
+
+    // The chosen channel's settings (docs/channels.md「利用者のカスタマイズ」). Setting a value back to
+    // the channel's own drops the change, so a later default still reaches it.
+    fun setTalkLevel(level: TalkLevel) = editStation { _, o -> o.copy(talkLevel = level) }
+    fun setEvent(kind: TalkEventKind, on: Boolean) = editStation { st, o -> o.copy(events = if (on) st.events + kind else st.events - kind) }
+    fun setGuideLength(length: GuideLength) = editStation { _, o -> o.copy(guideLength = length) }
+    fun setMoodTone(on: Boolean) = editStation { _, o -> o.copy(moodTone = on) }
+    fun setSound(sound: SoundChoice) = editStation { _, o -> o.copy(sound = sound) }
+    fun setPrefer(kind: SpotKind, on: Boolean) = editStation { st, o -> o.copy(prefer = if (on) st.prefer + kind else st.prefer - kind) }
+    fun resetStation() = editStation { _, _ -> StationOverrides() }
+
+    private fun editStation(change: (Station, StationOverrides) -> StationOverrides) = edit { s ->
+        val station = stationRepo.select(s)
+        val changed = station.normalize(change(station, station.overrides))
+        s.copy(stationOverrides = (s.stationOverrides - station.id) + if (changed.isEmpty) emptyMap() else mapOf(station.id to changed))
+    }
     fun setMoodEnabled(on: Boolean) = edit { it.copy(moodEnabled = on) }
     fun setAmbientEnabled(on: Boolean) = edit { it.copy(ambientEnabled = on) }
     fun setAmbientVolume(percent: Int) = edit { it.copy(ambientVolume = percent) }

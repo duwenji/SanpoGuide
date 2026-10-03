@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "history",
+  "version": 1,
+  "name": "歴史探訪",
+  "summary": "寺社や史跡の由来、関わった人物の話を多めに。解説は長め",
+  "lang": "ja",
+  "greeting": "ここからは、歴史の話を多めにしますね。",
+  "talk": {
+    "level": "normal",
+    "events": { "spot": true, "revisit": true, "milestone": true, "rest": true, "start": true, "finish": true }
+  },
+  "spots": { "prefer": ["temple", "shrine", "historic", "museum"], "skip": [] },
+  "guide": { "length": "long" },
+  "mood": { "tone": true, "sound": "auto" }
+}

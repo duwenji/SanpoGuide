@@ -4,6 +4,7 @@ import android.location.Location
 import com.example.sanpoguide.data.RouteGeometry
 import com.example.sanpoguide.history.LatLon
 import com.example.sanpoguide.history.SpotVisit
+import com.example.sanpoguide.history.StationSegment
 import com.example.sanpoguide.history.WalkRecord
 
 /** Mutable state of the walk in progress. Owned and mutated by the walk service only. */
@@ -41,6 +42,33 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
 
     /** Recent lines, so the model can avoid repeating itself. */
     val recentLines = ArrayDeque<String>()
+
+    /** The channels used on this walk, in order (docs/channels.md「記録」). */
+    val stations = mutableListOf<StationSegment>()
+
+    /** When the user last switched channels mid-walk; 0 if they haven't. */
+    var stationSwitchedAt = 0L
+        private set
+
+    /** The new channel's greeting, to be said before anything else but weather warnings. */
+    var pendingGreeting: String? = null
+
+    /** The channel the walk starts on; a switch later goes through [switchStation]. */
+    fun startStation(key: String) {
+        stations += StationSegment(key, startedAt)
+    }
+
+    /** Moves to another channel: what was said and where carries over, only the voice changes. */
+    fun switchStation(key: String, greeting: String, now: Long = System.currentTimeMillis()) {
+        if (stations.lastOrNull()?.station == key) return
+        stations += StationSegment(key, now)
+        stationSwitchedAt = now
+        pendingGreeting = greeting
+    }
+
+    /** Right after a switch the greeting has the floor; spot talks and small talk wait a moment. */
+    fun justSwitched(now: Long = System.currentTimeMillis()): Boolean =
+        stationSwitchedAt > 0 && now - stationSwitchedAt < SWITCH_QUIET_MS
 
     fun elapsedMs(now: Long = System.currentTimeMillis()) = now - startedAt
 
@@ -81,7 +109,7 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
 
     fun toRecord(endedAt: Long = System.currentTimeMillis()) = WalkRecord(
         id = id, startedAt = startedAt, endedAt = endedAt, distanceM = distanceM,
-        route = route.toList(), visits = visits.toList(),
+        route = route.toList(), visits = visits.toList(), stations = stations.toList(),
     )
 
     private fun trackRest(location: Location) {
@@ -98,5 +126,6 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
         const val MIN_STEP_M = 8f
         const val REST_RADIUS_M = 30f
         const val MAX_ROUTE_POINTS = 3000
+        const val SWITCH_QUIET_MS = 60_000L
     }
 }
