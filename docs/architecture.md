@@ -192,8 +192,11 @@ flowchart LR
 | `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値、地図の種類 | SettingsRepository, KeyCipher, TalkLevel, Threshold, MapStyle | 293 |
 | `mood` | 雰囲気のモデル、場所の種類の推定、現在の雰囲気 | Mood, PlaceGuess, MoodSource | 186 |
 | `history` | 散歩の記録（端末内 JSON、最新 500 件）と再訪の判定 | HistoryStore | 173 |
-| `prompt` | プロンプトファイルの読み込みと変数の埋め込み | PromptTemplates, Prompts | 132 |
-| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 94 |
+| `prompt` | プロンプトファイルの読み込みと変数の埋め込み | PromptTemplates, Prompts | 134 |
+| `station` | チャンネル（[channels.md](channels.md)）。組み込みのチャンネルの読み込みと、プロンプトのスロットの値 | Station, BuiltInStations, StationRepository | 128 |
+| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 99 |
+
+チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認は、Android に依存しない別のモジュール `:station-format`（`station-format/`）にある。チャンネル管理システムの審査用の道具でも同じ確認を使うため。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。
 
 ## 変更の入口: こうしたいときはここを開く
 

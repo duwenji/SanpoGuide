@@ -3,6 +3,8 @@ package com.example.sanpoguide.prompt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.example.sanpoguide.station.BuiltInStations
+import com.example.sanpoguide.station.format.DirectoryStationFiles
 import org.junit.Test
 import java.io.File
 
@@ -16,6 +18,10 @@ class PromptFilesTest {
     private val prompts = PromptTemplates { name -> File(root, "$name.md").readText() }
 
     private val spot = mapOf("name" to "鶴岡八幡宮", "category" to "神社")
+
+    /** System prompts take the channel's slots; the standard channel's are the realistic sample. */
+    private val standard = BuiltInStations.load { id -> DirectoryStationFiles(File("src/main/assets/channels/$id")) }
+        .first { it.manifest.id == BuiltInStations.STANDARD }
 
     private val noNeed = mapOf(
         "need_shelter" to false, "rain_coming" to false, "need_toilet" to false, "need_drink" to false, "need_seat" to false,
@@ -40,7 +46,7 @@ class PromptFilesTest {
 
     /** Sample values per file; files with two cases cover both the "empty" and "full" shapes. */
     private val samples: Map<String, List<Map<String, Any?>>> = mapOf(
-        Prompts.Guide.SYSTEM to listOf(emptyMap()),
+        Prompts.Guide.SYSTEM to listOf(standard.guideSystemVars()),
         Prompts.Guide.USER to listOf(
             spot + mapOf(
                 "distance_m" to 45, "inside" to false,
@@ -50,7 +56,8 @@ class PromptFilesTest {
             spot + mapOf("distance_m" to 0, "inside" to true, "tags" to listOf("leisure=park"), "coords" to null),
             spot + mapOf("distance_m" to null, "inside" to false, "tags" to emptyList<String>(), "coords" to null),
         ),
-        Prompts.Talk.SYSTEM to listOf(emptyMap()),
+        Prompts.Talk.SYSTEM to listOf(standard.companionSystemVars()),
+        Prompts.Talk.STATION_EVENT to listOf(mapOf("text" to "- 歩いてきた道の歴史にひとこと触れる")),
         Prompts.Talk.SITUATION to listOf(
             mapOf(
                 "now" to "9月28日（月）14:05", "time_of_day" to "昼", "season" to "秋",

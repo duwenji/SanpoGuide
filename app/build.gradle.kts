@@ -85,6 +85,7 @@ dependencies {
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.anthropic:anthropic-java:2.34.0")
+    implementation(project(":station-format"))
 
     testImplementation("junit:junit:4.13.2")
     // The real org.json; Android's is a stub in local unit tests.
