@@ -3,7 +3,9 @@ package com.example.sanpoguide.ui
 import android.annotation.SuppressLint
 import android.app.Application
 import android.location.Location
+import android.location.LocationManager
 import android.util.Log
+import androidx.core.location.LocationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sanpoguide.SanpoApp
@@ -229,10 +231,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selected = MutableStateFlow<SelectedSpot?>(null)
     val selected: StateFlow<SelectedSpot?> = _selected.asStateFlow()
 
+    /** The device's location setting is off, so no position can be had even with the permission. */
+    private val _locationOff = MutableStateFlow(false)
+    val locationOff: StateFlow<Boolean> = _locationOff.asStateFlow()
+
+    private fun isLocationEnabled(): Boolean =
+        app.getSystemService(LocationManager::class.java)?.let(LocationManagerCompat::isLocationEnabled) ?: false
+
+    /** Searches again if the user has just turned the location setting on (e.g. back from Settings). */
+    fun recheckLocationSetting() {
+        if (_locationOff.value && isLocationEnabled()) refresh()
+    }
+
     @SuppressLint("MissingPermission") // Called only after the permission is granted.
     fun refresh() {
         if (map.value.notice != null) mapRetry.update { it + 1 }
         if (_loading.value) return
+        _locationOff.value = !isLocationEnabled()
+        if (_locationOff.value) {
+            _error.value = null
+            return
+        }
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
