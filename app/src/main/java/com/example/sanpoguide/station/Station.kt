@@ -1,5 +1,6 @@
 package com.example.sanpoguide.station
 
+import com.example.sanpoguide.prompt.StationPrompts
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.station.format.GuideLength
 import com.example.sanpoguide.station.format.Slot
@@ -82,30 +83,15 @@ class Station(
         prefer = overrides.prefer?.takeIf { it != manifest.prefer.toSet() },
     )
 
-    fun slot(slot: Slot): String? = pkg.slots[slot] ?: standard.slots[slot]
+    fun slot(slot: Slot): String? = slots(slot)
+    private val slots = StationPrompts.slots(pkg, standard)
 
     /** Variables for `guide/system`. */
-    fun guideSystemVars(): Map<String, Any?> = mapOf(
-        "persona" to slot(Slot.GUIDE_PERSONA),
-        "length" to lengthText(guideLength),
-        "focus" to slot(Slot.GUIDE_FOCUS),
-    )
+    fun guideSystemVars(): Map<String, Any?> = StationPrompts.guideSystemVars(slots, guideLength)
 
     /** Variables for `companion/system`. */
-    fun companionSystemVars(): Map<String, Any?> = mapOf(
-        "persona" to slot(Slot.COMPANION_PERSONA),
-        "topics" to slot(Slot.COMPANION_TOPICS),
-    )
+    fun companionSystemVars(): Map<String, Any?> = StationPrompts.companionSystemVars(slots)
 
     /** This channel's extra instructions for [kind], appended after the event's own prompt; null if none. */
-    fun eventInstructions(kind: TalkEventKind): String? = Slot.forEvent(kind)?.let(::slot)
-
-    companion object {
-        /** Wording for the guide's length, as the standard prompt has always put it for [GuideLength.NORMAL]. */
-        fun lengthText(length: GuideLength): String = when (length) {
-            GuideLength.SHORT -> "100〜150字程度、1〜2段落"
-            GuideLength.NORMAL -> "200〜300字程度、2〜3段落"
-            GuideLength.LONG -> "300〜450字程度、3〜4段落"
-        }
-    }
+    fun eventInstructions(kind: TalkEventKind): String? = StationPrompts.eventInstructions(slots, kind)
 }

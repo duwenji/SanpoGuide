@@ -25,11 +25,11 @@ flowchart TB
   end
 
   subgraph APP["共有部品（SanpoApp.onCreate() で生成）"]
-    prompt["prompt<br/>PromptTemplates<br/>← assets/prompts/*.md"]
+    prompt["prompt<br/>PromptTemplates・StationPrompts（:station-format）<br/>← sanpoguide/prompts/*.md"]
     history["history<br/>HistoryStore<br/>walk_history.json（端末内）"]
     settings["settings<br/>SettingsRepository<br/>KeyCipher・Threshold"]
     mood["mood<br/>MoodSource・Mood・PlaceGuess"]
-    station["station<br/>StationRepository・Station<br/>← assets/channels/（:station-format で確認）"]
+    station["station<br/>StationRepository・Station<br/>← sanpoguide/channels/（:station-format で確認）"]
     data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos<br/>RouteClient・GoogleMapTiles"]
     guide["guide<br/>GuideRepository・Speaker<br/>LlmClient・Provider"]
     companion["companion<br/>WalkCompanion・CompanionFeed<br/>WeatherClient ほか"]
@@ -71,9 +71,9 @@ flowchart LR
 
   Talk["<b>maybeTalk()</b><br/>① 天気の急変（頻度に関係なく）<br/>② チャンネルを切り替えた直後の一言（AI なし）<br/>③ スポット 60m 以内（初訪問 / 再訪。SpotChooser）<br/>④ 日の入り前（頻度に関係なく）<br/>── ここから雑談の間隔を守る ──<br/>⑤ 施設の案内（FacilityAdvisor）<br/>── 切り替えの直後 1 分はここまで ──<br/>⑥ 休憩の声かけ（4 分とどまる）<br/>⑦ 距離・時間の区切り（チャンネルの頻度）"]
 
-  Talk -- "TalkEvent" --> Compose["<b>文を作る</b><br/>初訪問のスポット: GuideRepository.guideFor()<br/>それ以外（再訪を含む）: WalkCompanion.say()<br/>文面は assets/prompts/ と、選んでいるチャンネルから"]
+  Talk -- "TalkEvent" --> Compose["<b>文を作る</b><br/>初訪問のスポット: GuideRepository.guideFor()<br/>それ以外（再訪を含む）: WalkCompanion.say()<br/>文面は sanpoguide/prompts/ と、選んでいるチャンネルから"]
   Compose -- "生成" --> AI["AI サービス<br/>LlmClient"]
-  Compose -. "キー未設定・通信失敗" .-> Fallback["定型文<br/>assets/prompts/fallback/"]
+  Compose -. "キー未設定・通信失敗" .-> Fallback["定型文<br/>sanpoguide/prompts/fallback/"]
   Compose --> Speak["speakLine(text)"]
   Speak --> Speaker["読み上げ<br/>Speaker（TTS）"]
   Speak --> Feed["画面のカード<br/>CompanionFeed"]
@@ -186,7 +186,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  Assets["assets/channels/{id}/<br/>channel.json・prompts/"] --> Check["BuiltInStations<br/>StationValidator（:station-format）<br/>API-003 の確認"]
+  Assets["sanpoguide/channels/{id}/<br/>channel.json・prompts/"] --> Check["BuiltInChannels・BuiltInStations<br/>StationValidator（:station-format）<br/>API-003 の確認"]
   ThirdParty["第三者のチャンネル<br/>API-002 のリスト（計画中）"] -. "段階 5" .-> Check
   Check --> Repo["<b>StationRepository</b><br/>current: Station"]
   Settings["設定<br/>stationId・stationOverrides"] --> Repo
@@ -222,15 +222,15 @@ flowchart LR
 | `station` | チャンネル（[channels.md](channels.md)）。組み込みのチャンネルの読み込み、利用者の変更の反映、プロンプトのスロットの値、画面の表示名 | Station, BuiltInStations, StationRepository, StationLabels | 244 |
 | (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 100 |
 
-チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認は、Android に依存しない別のモジュール `:station-format`（`station-format/`、4 ファイル・341 行）にある。チャンネル管理システムの審査用の道具でも同じ確認を使うため。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。
+チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認、プロンプトのファイルと `PromptTemplates`、チャンネルのスロットからプロンプトを組み立てる `StationPrompts`、組み込みのチャンネルは、Android に依存しない別のモジュール `:station-format`（`station-format/`）にある。チャンネル管理システムの審査用の道具でも、同じ確認と同じプロンプトを使うため（GitHub Packages に `com.example.sanpoguide:station-format` として公開する）。ファイルは `station-format/src/main/resources/sanpoguide/` にあり、アプリはクラスパスから読む。
 
 ## 変更の入口: こうしたいときはここを開く
 
 | やりたいこと | 最初に開くファイル |
 |---|---|
-| 話しかけ・解説の文面を変える | 枠は `assets/prompts/`（一覧は [prompts.md](prompts.md)）、役割や話題はチャンネルの `assets/channels/{id}/prompts/` |
+| 話しかけ・解説の文面を変える | 枠は `station-format/src/main/resources/sanpoguide/prompts/`（一覧は [prompts.md](prompts.md)）、役割や話題はチャンネルの `sanpoguide/channels/{id}/prompts/` |
 | 話す条件や優先順位を変える | `walk/WalkService.kt` の `maybeTalk()`。スポットの選び方は `companion/SpotChooser.kt` |
-| 組み込みのチャンネルを追加・変更する | `assets/channels/{id}/`（形式は [API-003](channel-package-format.md)）と、`station/BuiltInStations.kt` の `IDS` |
+| 組み込みのチャンネルを追加・変更する | `station-format/src/main/resources/sanpoguide/channels/{id}/`（形式は [API-003](channel-package-format.md)）と、`BuiltInChannels.kt` の `IDS` |
 | チャンネルの形式の確認を変える | `station-format/`（`StationValidator`）。形式そのものを変えるときは API-003 も |
 | チャンネルの設定画面の項目を変える | `ui/SettingsScreen.kt` の `StationSettings`・`ui/SettingsViewModel.kt`、保存は `settings/SettingsRepository.kt` |
 | 距離・時間・気温などの既定値を変える | `settings/Threshold.kt` |
