@@ -3,6 +3,9 @@ package com.example.sanpoguide.station
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.station.format.DirectoryStationFiles
+import com.example.sanpoguide.history.StationSegment
+import com.example.sanpoguide.history.WalkRecord
+import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.station.format.Slot
 import com.example.sanpoguide.station.format.TalkEventKind
@@ -10,6 +13,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Test
 import java.io.File
 
@@ -75,6 +81,17 @@ class StationAssetsTest {
         assertEquals(TalkLevel.NORMAL, changed.defaultTalkLevel)
         assertFalse(changed.moodTone)
         assertTrue(standard.moodTone)
+    }
+
+    @Test
+    fun `the history names the channels of a walk`() {
+        val repo = StationRepository(stations, MutableStateFlow(GuideSettings()), CoroutineScope(Dispatchers.Unconfined))
+        fun walk(vararg keys: String) = WalkRecord(1, 0, 1, 0.0, emptyList(), emptyList(), keys.mapIndexed { i, k -> StationSegment(k, i.toLong()) })
+        assertEquals("標準", repo.namesOf(walk()))
+        assertEquals("標準 → 歴史探訪", repo.namesOf(walk("builtin:standard@1", "builtin:history@1")))
+        // A later version of the same channel is still that channel; back-to-back repeats collapse.
+        assertEquals("自然観察", repo.namesOf(walk("builtin:nature@1", "builtin:nature@2")))
+        assertEquals("標準 → （今はないチャンネル）", repo.namesOf(walk("builtin:standard@1", "builtin:retired@1")))
     }
 
     @Test

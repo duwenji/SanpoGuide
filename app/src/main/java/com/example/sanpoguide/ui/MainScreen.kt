@@ -102,6 +102,7 @@ fun MainScreen(
     val map by viewModel.map.collectAsStateWithLifecycle()
     val googleCopyright by viewModel.googleCopyright.collectAsStateWithLifecycle()
     val mood by viewModel.mood.collectAsStateWithLifecycle()
+    val station by viewModel.station.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -141,6 +142,7 @@ fun MainScreen(
                 return@Column
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            StationPicker(station, viewModel.stations, viewModel::chooseStation, Modifier.padding(horizontal = 16.dp))
             if (walking || lines.isNotEmpty()) {
                 // The scene is part of walk mode, not something to look at while walking.
                 CompanionCard(liveWalk, lines, scene = mood.takeIf { settings.moodEnabled && walking })

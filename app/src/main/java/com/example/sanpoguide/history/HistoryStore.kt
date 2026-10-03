@@ -28,6 +28,8 @@ data class SpotVisit(
     /** Null for records saved before positions were stored. */
     val lat: Double? = null,
     val lon: Double? = null,
+    /** The channel in use when the companion spoke here (`Station.key`); null for records from before channels. */
+    val station: String? = null,
 ) {
     /**
      * Whether this visit was to [poi]. OpenStreetMap often maps a place twice (as a point and
@@ -57,9 +59,14 @@ data class WalkRecord(
     val distanceM: Double,
     val route: List<LatLon>,
     val visits: List<SpotVisit>,
+    /** The channels used, in order; empty for records from before channels (which were all the standard one). */
+    val stations: List<StationSegment> = emptyList(),
 ) {
     val durationMs: Long get() = endedAt - startedAt
 }
+
+/** From [fromMs] on, the walk was on [station] (`Station.key`, e.g. `builtin:history@1`). */
+data class StationSegment(val station: String, val fromMs: Long)
 
 /**
  * The user's walking history, kept only on this device (app-private storage, no backup).
@@ -103,7 +110,7 @@ class HistoryStore(context: Context) {
             emptyList()
         } else {
             val array = JSONArray(String(file.readFully(), Charsets.UTF_8))
-            (0 until array.length()).map { walkFromJson(array.getJSONObject(it)) }
+            (0 until array.length()).map { WalkJson.fromJson(array.getJSONObject(it)) }
         }
     } catch (e: Exception) {
         Log.w(TAG, "Could not read walk history; starting fresh", e)
@@ -111,7 +118,7 @@ class HistoryStore(context: Context) {
     }
 
     private fun write(walks: List<WalkRecord>) {
-        val json = JSONArray().apply { walks.forEach { put(walkToJson(it)) } }.toString()
+        val json = JSONArray().apply { walks.forEach { put(WalkJson.toJson(it)) } }.toString()
         val out = file.startWrite()
         try {
             out.write(json.toByteArray(Charsets.UTF_8))
@@ -122,7 +129,15 @@ class HistoryStore(context: Context) {
         }
     }
 
-    private fun walkToJson(w: WalkRecord) = JSONObject()
+    private companion object {
+        const val TAG = "HistoryStore"
+        const val MAX_WALKS = 500
+    }
+}
+
+/** The history file's format, one walk at a time. Fields added later are optional, so old files still load. */
+internal object WalkJson {
+    fun toJson(w: WalkRecord): JSONObject = JSONObject()
         .put("id", w.id)
         .put("startedAt", w.startedAt)
         .put("endedAt", w.endedAt)
@@ -135,13 +150,18 @@ class HistoryStore(context: Context) {
                         .put("poiId", v.poiId).put("name", v.name).put("category", v.category)
                         .put("at", v.at).put("remark", v.remark)
                         .put("lat", v.lat).put("lon", v.lon)
+                        .put("station", v.station)
                 )
             }
         })
+        .put("stations", JSONArray().apply {
+            w.stations.forEach { put(JSONObject().put("station", it.station).put("from", it.fromMs)) }
+        })
 
-    private fun walkFromJson(o: JSONObject): WalkRecord {
+    fun fromJson(o: JSONObject): WalkRecord {
         val route = o.optJSONArray("route") ?: JSONArray()
         val visits = o.optJSONArray("visits") ?: JSONArray()
+        val stations = o.optJSONArray("stations") ?: JSONArray()
         return WalkRecord(
             id = o.getLong("id"),
             startedAt = o.getLong("startedAt"),
@@ -161,13 +181,13 @@ class HistoryStore(context: Context) {
                     remark = if (v.isNull("remark")) null else v.getString("remark"),
                     lat = if (v.has("lat")) v.getDouble("lat") else null,
                     lon = if (v.has("lon")) v.getDouble("lon") else null,
+                    station = v.optString("station").ifEmpty { null },
                 )
             },
+            stations = (0 until stations.length()).map {
+                val seg = stations.getJSONObject(it)
+                StationSegment(seg.getString("station"), seg.getLong("from"))
+            },
         )
-    }
-
-    private companion object {
-        const val TAG = "HistoryStore"
-        const val MAX_WALKS = 500
     }
 }

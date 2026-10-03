@@ -85,11 +85,13 @@ class WalkService : LifecycleService() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
             )
             val s = WalkSession()
+            s.startStation(app.stations.current.value.key)
             session = s
             app.feed.startWalk(s)
             startLocationUpdates()
             startTicker()
             startAmbient()
+            watchStations()
             _walking.value = true
         }
         return START_STICKY
@@ -134,6 +136,19 @@ class WalkService : LifecycleService() {
                 Soundscape.of(station.sound, mood).takeIf { settings.ambientEnabled },
                 settings.ambientVolume, settings.ambientEarphonesOnly,
             )
+        }
+    }
+
+    /**
+     * A channel switch mid-walk: recorded, and the new channel introduces itself. Changing only
+     * a setting of the same channel (e.g. its talk level) isn't a switch.
+     */
+    private fun watchStations() = lifecycleScope.launch {
+        app.stations.current.collect { station ->
+            val s = session ?: return@collect
+            if (s.stations.lastOrNull()?.station == station.key) return@collect
+            s.switchStation(station.key, station.manifest.greeting)
+            maybeTalk()
         }
     }
 
@@ -187,10 +202,20 @@ class WalkService : LifecycleService() {
             return
         }
 
+        // The user just switched channels: the new one says hello before anything else. No AI, so it's instant.
+        s.pendingGreeting?.let { line ->
+            talk {
+                s.pendingGreeting = null
+                speakLine(line)
+            }
+            return
+        }
+        val justSwitched = s.justSwitched(now)
+
         // While the user stands still, don't run through every spot within reach one by one;
         // the spot they arrived at has been introduced, and a rest remark may be due instead.
         val stationary = s.restMinutes(now) >= STATIONARY_MINUTES
-        if (!stationary && now - s.lastSpotTalkAt >= level.spotGapMs) {
+        if (!stationary && !justSwitched && now - s.lastSpotTalkAt >= level.spotGapMs) {
             // One spot per tick, by distance from the user (spots' distances to each other don't matter).
             val candidates = app.spots.spots.value
                 .filter { poi -> poi.id !in s.talkedAbout && s.visits.none { it.matches(poi) } }
@@ -240,6 +265,9 @@ class WalkService : LifecycleService() {
             return
         }
 
+        // Small talk right after the greeting would crowd it.
+        if (justSwitched) return
+
         val restMinutes = s.restMinutes(now)
         if (level.remarkOnRest && station.talksOn(TalkEventKind.REST) && restMinutes >= REST_MINUTES && !s.restRemarked) {
             talk {
@@ -281,7 +309,10 @@ class WalkService : LifecycleService() {
         } else {
             app.companion.say(TalkEvent.Revisit(poi, past), s, weather)
         }
-        s.visits += SpotVisit(poi.id, poi.name, poi.category, System.currentTimeMillis(), text, poi.lat, poi.lon)
+        s.visits += SpotVisit(
+            poi.id, poi.name, poi.category, System.currentTimeMillis(), text, poi.lat, poi.lon,
+            station = app.stations.current.value.key,
+        )
         app.feed.update(s)
         app.feed.guide(poi)
         saveProgress(s)

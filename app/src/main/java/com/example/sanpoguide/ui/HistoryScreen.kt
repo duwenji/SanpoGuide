@@ -45,7 +45,10 @@ import java.util.Locale
 
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
     private val history = (application as SanpoApp).history
+    private val stations = (application as SanpoApp).stations
     val walks = history.walks
+
+    fun stationsOf(walk: WalkRecord): String = stations.namesOf(walk)
 
     fun clearAll() {
         viewModelScope.launch { history.clear() }
@@ -87,7 +90,7 @@ fun HistoryScreen(viewModel: HistoryViewModel, onClose: () -> Unit) {
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             item { Summary(walks) }
             items(walks, key = { it.id }) { walk ->
-                WalkRow(walk)
+                WalkRow(walk, viewModel.stationsOf(walk))
                 HorizontalDivider()
             }
             item {
@@ -152,13 +155,14 @@ private fun Stat(label: String, value: String) {
 }
 
 @Composable
-private fun WalkRow(walk: WalkRecord) {
+private fun WalkRow(walk: WalkRecord, stations: String) {
     val date = SimpleDateFormat("M月d日（E）H:mm", Locale.JAPAN).format(Date(walk.startedAt))
     ListItem(
         headlineContent = { Text(date) },
         supportingContent = {
             Text(
                 "${WalkCompanion.km(walk.distanceM)}km・${formatDuration(WalkCompanion.minutes(walk.durationMs))}" +
+                    "\nチャンネル: $stations" +
                     if (walk.visits.isEmpty()) "" else "\n" + walk.visits.joinToString("、") { it.name },
             )
         },
