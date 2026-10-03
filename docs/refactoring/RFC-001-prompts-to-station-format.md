@@ -60,7 +60,7 @@
 
 | No. | 内容 | 対応 |
 |---|---|---|
-| 1 | ZIP の展開と配信元の署名の確認（R-2） | 第三者のチャンネルの取り込み（ADR-001 T-5）か、管理システムの機械審査の実装の前 |
+| 1 | ~~ZIP の展開と配信元の署名の確認（R-2）~~ → station-format 1.1.0 で追加（2026-10-04）。`StationValidator.checkArchive`、署名の確認は差し替えられる `Ed25519Verifier`（JVM は `JcaEd25519`、アプリは Tink を渡す予定） | — |
 | 2 | プロンプトのファイルが見つからないときの例外が `FileNotFoundException` から `IllegalArgumentException` に変わった | ファイルはビルドに入っているので通常は起きない。`WalkCompanion` は例外の種類を問わず定型文に戻る |
 | 3 | GitHub Packages の Maven は、公開リポジトリでも読むのにトークン（`read:packages`）が要る | 管理システムの CI に設定する |
 | 4 | 計装テストがないため、端末での確認は手作業 | 必要になったら androidTest を整える |

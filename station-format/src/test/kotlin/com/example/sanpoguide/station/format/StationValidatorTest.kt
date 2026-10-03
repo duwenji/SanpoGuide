@@ -135,16 +135,7 @@ class StationValidatorTest {
         assertEquals(RejectCode.BAD_MANIFEST, rejected(files(manifest { put("publisher", publisher) })))
         val thirdParty = manifest { put("publisher", publisher) }
         assertEquals(RejectCode.BAD_SIGNATURE, rejected(files(thirdParty), StationOrigin.THIRD_PARTY))
-        assertEquals(RejectCode.BAD_MANIFEST, rejected(files(manifest(), "signature.json" to "{}"), StationOrigin.THIRD_PARTY))
-    }
-
-    @Test
-    fun `the package must match its entry in the list`() {
-        val thirdParty = files(manifest { put("publisher", publisher) }, "signature.json" to "{}")
-        val listed = ListedAs("kamakura-history", 3, publisher)
-        assertTrue(StationValidator.check(thirdParty, StationOrigin.THIRD_PARTY, listed) is StationCheck.Ok)
-        assertEquals(RejectCode.BAD_MANIFEST, rejected(thirdParty, StationOrigin.THIRD_PARTY, listed.copy(version = 4)))
-        assertEquals(RejectCode.PUBLISHER_MISMATCH, rejected(thirdParty, StationOrigin.THIRD_PARTY, listed.copy(publisher = "sg1" + "b".repeat(32))))
+        // Signed third-party packages: PackageArchiveTest.
     }
 
     @Test
