@@ -1,8 +1,8 @@
 # 散策ガイドの構造図
 
-アプリ全体を 5 枚の図で説明する。図 1 で「どこに何があるか」をつかみ、図 2〜5 で散策モードの話しかけ・スポット解説・雰囲気・地図のルートと向きという 4 つの流れを追う。
+アプリ全体を 6 枚の図で説明する。図 1 で「どこに何があるか」をつかみ、図 2〜6 で散策モードの話しかけ・スポット解説・雰囲気・地図のルートと向き・チャンネルという 5 つの流れを追う。
 
-- ソース 48 ファイル / 約 5,870 行、パッケージ 10
+- ソース 60 ファイル / 約 6,980 行（アプリ 56 ファイル・6,638 行、チャンネルの形式のモジュール `:station-format` 4 ファイル・341 行）、パッケージ 11
 - 画面 3（メイン・設定・記録）、常駐サービス 1（`WalkService`）、外部サービス 7（Google マップは設定で選んだときだけ）
 
 図はコードから手で書き起こしたもの。`WalkService` の判定順を変えたり、パッケージを追加したりしたときは、この文書も更新する。
@@ -15,7 +15,7 @@ DI ライブラリは使っていない。`SanpoApp.onCreate()` が部品を 1 �
 flowchart TB
   subgraph UI["画面（ui）"]
     MainActivity
-    MainScreen["MainScreen<br/>SpotMap・CompanionCard"] --> MainViewModel
+    MainScreen["MainScreen<br/>SpotMap・CompanionCard・StationPicker"] --> MainViewModel
     SettingsScreen --> SettingsViewModel
     HistoryScreen --> HistoryViewModel
   end
@@ -29,6 +29,7 @@ flowchart TB
     history["history<br/>HistoryStore<br/>walk_history.json（端末内）"]
     settings["settings<br/>SettingsRepository<br/>KeyCipher・Threshold"]
     mood["mood<br/>MoodSource・Mood・PlaceGuess"]
+    station["station<br/>StationRepository・Station<br/>← assets/channels/（:station-format で確認）"]
     data["data<br/>SpotRepository<br/>OverpassClient・SpotPhotos<br/>RouteClient・GoogleMapTiles"]
     guide["guide<br/>GuideRepository・Speaker<br/>LlmClient・Provider"]
     companion["companion<br/>WalkCompanion・CompanionFeed<br/>WeatherClient ほか"]
@@ -57,7 +58,7 @@ flowchart TB
   MainScreen -. "rememberHeading が読む" .-> Device
 ```
 
-`WalkService` がアプリの中心。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットを見て「いま何を話すか」を決める。`sound` だけは SanpoApp ではなく、WalkService が必要になったときに作る。
+`WalkService` がアプリの中心。散策モード中は画面を閉じても動き続け、位置・天気・周辺スポットと、選んでいるチャンネル（`station`）を見て「いま何を話すか」を決める。`sound` だけは SanpoApp ではなく、WalkService が必要になったときに作る。
 
 ## 図 2 · 散策モード: 話しかけるまでの流れ
 
@@ -68,9 +69,9 @@ flowchart LR
   Loc["位置の更新<br/>10 秒・10m ごと<br/>（300m 移動でスポット再検索）"] --> Talk
   Tick["タイマー<br/>止まっていても判定"] --> Talk
 
-  Talk["<b>maybeTalk()</b><br/>① 天気の急変（頻度に関係なく）<br/>② スポット 60m 以内（初訪問 / 再訪）<br/>③ 日の入り前（頻度に関係なく）<br/>── ここから雑談の間隔を守る ──<br/>④ 施設の案内（FacilityAdvisor）<br/>⑤ 休憩の声かけ（4 分とどまる）<br/>⑥ 距離・時間の区切り（TalkLevel）"]
+  Talk["<b>maybeTalk()</b><br/>① 天気の急変（頻度に関係なく）<br/>② チャンネルを切り替えた直後の一言（AI なし）<br/>③ スポット 60m 以内（初訪問 / 再訪。SpotChooser）<br/>④ 日の入り前（頻度に関係なく）<br/>── ここから雑談の間隔を守る ──<br/>⑤ 施設の案内（FacilityAdvisor）<br/>── 切り替えの直後 1 分はここまで ──<br/>⑥ 休憩の声かけ（4 分とどまる）<br/>⑦ 距離・時間の区切り（チャンネルの頻度）"]
 
-  Talk -- "TalkEvent" --> Compose["<b>文を作る</b><br/>初訪問のスポット: GuideRepository.guideFor()<br/>それ以外（再訪を含む）: WalkCompanion.say()<br/>文面は assets/prompts/ から"]
+  Talk -- "TalkEvent" --> Compose["<b>文を作る</b><br/>初訪問のスポット: GuideRepository.guideFor()<br/>それ以外（再訪を含む）: WalkCompanion.say()<br/>文面は assets/prompts/ と、選んでいるチャンネルから"]
   Compose -- "生成" --> AI["AI サービス<br/>LlmClient"]
   Compose -. "キー未設定・通信失敗" .-> Fallback["定型文<br/>assets/prompts/fallback/"]
   Compose --> Speak["speakLine(text)"]
@@ -81,27 +82,29 @@ flowchart LR
 ```
 
 - 順番はコードの判定順（`walk/WalkService.kt` の `maybeTalk()`）そのまま。README の表とは並びが違い、実際には「スポット」が「日の入り」より先に判定される。
-- 天気と日の入りは安全に関わるため、話しかけの頻度設定を無視する。
+- 天気と日の入りは安全に関わるため、話しかけの頻度設定を無視する。施設の案内も含め、この 3 つはチャンネルの設定で止まらない。
+- スポット（初訪問・再訪）・休憩・区切り・開始・終了は、チャンネルの「話す場面」でオフにできる。頻度（`TalkLevel`）もチャンネルごと。
+- チャンネルを切り替えると、次に話すのは新しいチャンネルの一言（`WalkSession.pendingGreeting`）。その後 1 分はスポット案内と休憩・区切りを控える（`WalkSession.justSwitched()`）。
 - 読み上げ中は判定しない（`Speaker.isSpeaking` と `Mutex` で 1 件ずつ）。
-- 記録の保存は、スポット案内・距離の区切り・散歩の終了のときに行う。
+- 記録の保存は、スポット案内・距離の区切り・散歩の終了のときに行う。区切りで話さないチャンネルでも、区切りの時点で保存だけはする。
 
 ### スポットが近くに複数あるとき
 
 案内範囲（`ANNOUNCE_RADIUS_M` = 60m）は**ユーザーの現在地を中心にした円**で、スポットごとの範囲ではない。スポット同士の距離は判定に使わないので、「A が B の近くにある」こと自体は A の案内に影響しない。
 
-- 1 回の判定で案内するのは 1 件だけ。`notability`（Wikipedia/Wikidata タグで +2、主要カテゴリで +1）が高い方、同点なら近い方を選ぶ。
+- 1 回の判定で案内するのは 1 件だけ。`notability`（Wikipedia/Wikidata タグで +2、主要カテゴリで +1）に、チャンネルの「優先する話題」に入っている種類なら +2 を足し、高い方、同点なら近い方を選ぶ（`companion/SpotChooser.kt`）。チャンネルが除く種類は候補にしない。
 - 選ばれなかったスポットは候補に残る。次の判定（30 秒ごと）で次の条件をすべて満たせば案内される。
   - 前回のスポット案内から `TalkLevel.spotGapMs` 以上経った
   - まだ 60m 以内にいる
   - 2 分以上とどまっていない（とどまっている間は周りを順に紹介しない）
   - 読み上げ中でない
 - 間隔が空く前に 60m の外へ出たら、そのときは案内されない。案内済み（`talkedAbout`）にはならないので、また近づけば案内される。
-- 過去の訪問記録と一致するスポット（同じ ID、または同じ名前で近い位置）は候補から外れる。
+- 今回の散歩で案内したスポット（同じ ID、または同じ名前で近い位置）は候補から外れる。過去の散歩で訪れたスポットは、再訪の一言の候補になる。
 - スポットの通知は 1 枠（`SPOT_NOTIFICATION_ID`）を使い回すため、新しい案内が前の通知を置き換える。
 
 ## 図 3 · スポット解説: 地図でスポットをタップしたとき
 
-解説と写真は別々に取りに行く。解説は「AI サービス・モデル・スポット・位置情報を送る設定」の組み合わせでキャッシュするため、同じスポットで料金がかかるのは 1 回だけ。
+解説と写真は別々に取りに行く。解説は「AI サービス・モデル・チャンネル（版を含む）・解説の長さ・スポット・位置情報を送る設定」の組み合わせでキャッシュするため、同じ条件で料金がかかるのは 1 回だけ。解説の役割・重点・長さは、選んでいるチャンネルから入る。
 
 ```mermaid
 flowchart LR
@@ -132,7 +135,7 @@ flowchart LR
   MS --> Tone["話しかけのトーン<br/>WalkCompanion"]
 ```
 
-設定の「雰囲気に合わせる」をオフにすると、配色・絵・話し方は雰囲気を使わなくなる。背景音の選択だけは常に雰囲気を使う。
+設定の「画面を雰囲気に合わせる」をオフにすると、配色・絵は雰囲気を使わなくなる。話しかけのトーンに使うかはチャンネルの設定（`mood.tone`）で決まる。背景音は、チャンネルの背景音が「自動」のときに雰囲気から選ぶ。
 
 ## 図 5 · 地図: ルートと向き
 
@@ -177,33 +180,59 @@ flowchart LR
 
 解説のキャッシュは設定のオン・オフで分けている（同じスポットでも、緯度経度ありとなしで別の解説になるため）。
 
+## 図 6 · チャンネル: 選んだチャンネルが、解説・話しかけ・話す判断を変える
+
+チャンネル（設計は [channels.md](channels.md)、形式は [channel-package-format.md](channel-package-format.md)）は、語り手・話題・話す場面・頻度・解説の長さ・優先する話題・トーン・背景音のひとまとまり。コード上の名前は `Station`。
+
+```mermaid
+flowchart LR
+  Assets["assets/channels/{id}/<br/>channel.json・prompts/"] --> Check["BuiltInStations<br/>StationValidator（:station-format）<br/>API-003 の確認"]
+  ThirdParty["第三者のチャンネル<br/>API-002 のリスト（計画中）"] -. "段階 5" .-> Check
+  Check --> Repo["<b>StationRepository</b><br/>current: Station"]
+  Settings["設定<br/>stationId・stationOverrides"] --> Repo
+  Repo --> Guide["GuideRepository<br/>解説の役割・重点・長さ、キャッシュ"]
+  Repo --> Companion["WalkCompanion<br/>話しかけの役割・話題・出来事の追加の指示・トーン"]
+  Repo --> Walk["WalkService<br/>頻度・話す場面・優先する話題・背景音<br/>切り替えの一言・記録"]
+  Repo --> Screens["画面<br/>StationPicker・設定画面"]
+  Screens -- "選ぶ・変える" --> Settings
+```
+
+- 組み込みのチャンネル（標準・歴史探訪・自然観察・しずかに）は起動時に読み込み、第三者のパッケージと同じ確認（`StationValidator`）を通す。確認に通らなければ起動時に止まる（アプリ自身のファイルの誤りのため）。
+- `StationRepository.current` は、選んでいるチャンネルに利用者の変更（`StationOverrides`。初期値から変えた項目だけ）を重ねたもの。変えられるのは組み込みのチャンネルだけ。
+- プロンプトの `guide/system`・`companion/system` は枠で、チャンネルの文章は変数として入る（テンプレートとしては解釈されない）。最後に共通の指示 `shared/guard` が必ず付く。
+- 散歩中に切り替えると、`WalkService` が `current` の変化を見て、記録に区間を足し（`WalkSession.stations`）、一言を予約する。同じチャンネルの設定を変えただけでは切り替えとみなさない。
+- 天気の急変・日の入り・施設の案内は、チャンネルに項目がない（止められない）。
+
 ## パッケージ一覧
 
 パスは `app/src/main/java/com/example/sanpoguide/` からの相対。行数は空行・コメントを含む。
 
 | パッケージ | 役割 | 主なファイル | 行数 |
 |---|---|---|---:|
-| `ui` | Compose の 3 画面、地図（種類の切り替え・ルート・向きを含む）、発言カード、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, SpotMap, MapTiles, Heading, MoodScene, MainViewModel | 2,438 |
+| `ui` | Compose の 3 画面、地図（種類の切り替え・ルート・向きを含む）、発言カード、チャンネルの選択、雰囲気の配色と絵、ViewModel | MainScreen, SettingsScreen, SpotMap, StationPicker, MapTiles, Heading, MoodScene, MainViewModel | 2,679 |
 | `data` | Overpass でのスポット・施設検索、現在地とスポットの共有状態、Wikimedia の写真、徒歩ルート、Google の地図タイルのセッションと出典 | OverpassClient, SpotRepository, SpotPhotos, RouteClient, GoogleMapTiles | 721 |
-| `companion` | 散歩の友の発話、散歩中の状態、画面向けの発言、天気の取得と急変判定、施設案内の判定 | WalkCompanion, WalkSession, FacilityAdvisor, WeatherClient | 641 |
-| `sound` | 背景音の選択・その場での合成・再生 | Soundscape, Voices, AmbientPlayer | 436 |
-| `walk` | 散策モードのフォアグラウンドサービス。いつ何を話すかを決める | WalkService | 408 |
-| `guide` | AI サービスの抽象と実装、スポット解説とキャッシュ、TTS | GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker | 349 |
-| `settings` | 設定の保存、API キーの暗号化、話しかけの頻度、しきい値、地図の種類 | SettingsRepository, KeyCipher, TalkLevel, Threshold, MapStyle | 293 |
+| `companion` | 散歩の友の発話、散歩中の状態（チャンネルの切り替えを含む）、画面向けの発言、天気の取得と急変判定、施設案内の判定、話題にするスポットの選択 | WalkCompanion, WalkSession, SpotChooser, FacilityAdvisor, WeatherClient | 727 |
+| `sound` | 背景音の選択・その場での合成・再生 | Soundscape, Voices, AmbientPlayer | 448 |
+| `walk` | 散策モードのフォアグラウンドサービス。いつ何を話すかを決める | WalkService | 456 |
+| `guide` | AI サービスの抽象と実装、スポット解説とキャッシュ、TTS | GuideRepository, ClaudeClient, OpenAiCompatibleClient, Speaker | 354 |
+| `settings` | 設定の保存（選んでいるチャンネルと、その変更を含む）、チャンネル導入前の設定の移行、API キーの暗号化、話しかけの頻度の段階、しきい値、地図の種類 | SettingsRepository, StationMigration, OverrideCodec, KeyCipher, TalkLevel, Threshold, MapStyle | 396 |
 | `mood` | 雰囲気のモデル、場所の種類の推定、現在の雰囲気 | Mood, PlaceGuess, MoodSource | 186 |
-| `history` | 散歩の記録（端末内 JSON、最新 500 件）と再訪の判定 | HistoryStore | 173 |
+| `history` | 散歩の記録（端末内 JSON、最新 500 件。チャンネルの区間を含む）と再訪の判定 | HistoryStore（WalkJson） | 193 |
 | `prompt` | プロンプトファイルの読み込みと変数の埋め込み | PromptTemplates, Prompts | 134 |
-| `station` | チャンネル（[channels.md](channels.md)）。組み込みのチャンネルの読み込みと、プロンプトのスロットの値 | Station, BuiltInStations, StationRepository | 128 |
-| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 99 |
+| `station` | チャンネル（[channels.md](channels.md)）。組み込みのチャンネルの読み込み、利用者の変更の反映、プロンプトのスロットの値、画面の表示名 | Station, BuiltInStations, StationRepository, StationLabels | 244 |
+| (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 100 |
 
-チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認は、Android に依存しない別のモジュール `:station-format`（`station-format/`）にある。チャンネル管理システムの審査用の道具でも同じ確認を使うため。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。
+チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認は、Android に依存しない別のモジュール `:station-format`（`station-format/`、4 ファイル・341 行）にある。チャンネル管理システムの審査用の道具でも同じ確認を使うため。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。
 
 ## 変更の入口: こうしたいときはここを開く
 
 | やりたいこと | 最初に開くファイル |
 |---|---|
-| 話しかけ・解説の文面を変える | `assets/prompts/`（一覧は [prompts.md](prompts.md)） |
-| 話す条件や優先順位を変える | `walk/WalkService.kt` の `maybeTalk()` |
+| 話しかけ・解説の文面を変える | 枠は `assets/prompts/`（一覧は [prompts.md](prompts.md)）、役割や話題はチャンネルの `assets/channels/{id}/prompts/` |
+| 話す条件や優先順位を変える | `walk/WalkService.kt` の `maybeTalk()`。スポットの選び方は `companion/SpotChooser.kt` |
+| 組み込みのチャンネルを追加・変更する | `assets/channels/{id}/`（形式は [API-003](channel-package-format.md)）と、`station/BuiltInStations.kt` の `IDS` |
+| チャンネルの形式の確認を変える | `station-format/`（`StationValidator`）。形式そのものを変えるときは API-003 も |
+| チャンネルの設定画面の項目を変える | `ui/SettingsScreen.kt` の `StationSettings`・`ui/SettingsViewModel.kt`、保存は `settings/SettingsRepository.kt` |
 | 距離・時間・気温などの既定値を変える | `settings/Threshold.kt` |
 | 話しかけの頻度の段階を変える | `settings/TalkLevel.kt` |
 | 施設案内の条件を変える | `companion/FacilityAdvisor.kt` |
@@ -214,7 +243,11 @@ flowchart LR
 | 地図の向きの表示を変える | `ui/Heading.kt`（向きの取得）・`ui/SpotMap.kt`（描画） |
 | AI に送る位置情報を変える | `guide/GuidePrompt.kt`・`companion/WalkCompanion.kt`（設定 `shareLocationWithAi` で切り替え） |
 | 配色・絵・背景音の選び方を変える | `ui/MoodTheme.kt`・`ui/MoodScene.kt`・`sound/Soundscape.kt` |
-| 記録の保存形式や再訪の判定を変える | `history/HistoryStore.kt` |
+| 記録の保存形式や再訪の判定を変える | `history/HistoryStore.kt`（読み書きは `WalkJson`） |
+
+## 計画中: 第三者のチャンネル
+
+第三者が配信するチャンネルは、アプリとは別のチャンネル管理システムで審査・署名し、アプリは承認済みチャンネル・リストを取得する（[ADR-001](adr/ADR-001-third-party-channel-curation.md)、[API-002](channel-list-api.md)、[API-003](channel-package-format.md)、審査基準 [channel-review-policy.md](channel-review-policy.md)）。アプリ側の取り込みと素材（テキスト・画像・音声・映像）の表示はまだ実装していない（channels.md の段階 5〜7）。
 
 ## 計画中: 位置に紐づく秘密メッセージ
 

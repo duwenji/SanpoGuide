@@ -178,13 +178,16 @@ keytool -genkeypair -v -keystore release.jks -alias sanpoguide -keyalg RSA -keys
 | `prompt` | プロンプトファイルの読み込みと組み立て（`PromptTemplates`）、ファイルのパス一覧（`Prompts`） |
 | `mood` | 雰囲気のモデル（`Mood`）、場所の種類の推定（`PlaceGuess`）、画面・音・話しかけで共有する現在の雰囲気（`MoodSource`） |
 | `sound` | 背景音の種類と選び方（`Soundscape`）、音の合成（`Voices`）、再生（`AmbientPlayer`） |
-| `companion` | 散歩の友の発話（状況を集めてプロンプト変数にする。`WalkCompanion`）、進行中の散歩の状態（`WalkSession`）、画面向けの発言・散歩状況（`CompanionFeed`）、天気の取得（`WeatherClient`） |
-| `history` | 散歩の記録の保存（`HistoryStore`） |
-| `settings` | 設定の保存（`SettingsRepository`）、API キーの暗号化（`KeyCipher`）、話しかけの頻度（`TalkLevel`） |
+| `companion` | 散歩の友の発話（状況を集めてプロンプト変数にする。`WalkCompanion`）、進行中の散歩の状態（チャンネルの切り替えを含む。`WalkSession`）、画面向けの発言・散歩状況（`CompanionFeed`）、天気の取得（`WeatherClient`）、話題にするスポットの選択（`SpotChooser`） |
+| `history` | 散歩の記録の保存（`HistoryStore`。使ったチャンネルの区間を含む） |
+| `settings` | 設定の保存（`SettingsRepository`。選んでいるチャンネルとその変更を含む）、チャンネル導入前の設定の移行（`StationMigration`）、API キーの暗号化（`KeyCipher`）、話しかけの頻度の段階（`TalkLevel`） |
+| `station` | チャンネル（`Station`）、組み込みのチャンネルの読み込み（`BuiltInStations`）、選んでいるチャンネルに利用者の変更を重ねる（`StationRepository`） |
 | `walk` | 散策モードのフォアグラウンドサービス。位置の追跡と「いつ何を話すか」の判断（`WalkService`） |
-| `ui` | Compose の画面（メイン・記録・設定）、発言カード、地図、雰囲気の配色（`MoodTheme`）と絵（`MoodScene`）、ViewModel |
+| `ui` | Compose の画面（メイン・記録・設定）、発言カード、チャンネルの選択（`StationPicker`）、地図、雰囲気の配色（`MoodTheme`）と絵（`MoodScene`）、ViewModel |
 
-AI に送るプロンプトと定型文は、コードではなく `app/src/main/assets/prompts/` のファイルにある。一覧・使う場面・書き方・変数は [docs/prompts.md](docs/prompts.md) を参照。
+チャンネルの形式（[docs/channel-package-format.md](docs/channel-package-format.md)）の読み込みと確認は、Android に依存しない別モジュール `station-format/`（`:station-format`）にある。組み込みのチャンネルの文章は `app/src/main/assets/channels/` にある。構造の図は [docs/architecture.md](docs/architecture.md)。
+
+AI に送るプロンプトと定型文は、コードではなく `app/src/main/assets/prompts/` のファイル（と、チャンネルの `assets/channels/{id}/prompts/`）にある。一覧・使う場面・書き方・変数は [docs/prompts.md](docs/prompts.md) を参照。
 
 AI サービスを追加する場合、OpenAI 互換なら `Provider` に1行追加するだけでよい。独自 API の場合は `LlmClient` を実装し、`GuideRepository.createClient` に分岐を足す。
 
@@ -196,7 +199,7 @@ AI サービスを追加する場合、OpenAI 互換なら `Provider` に1行追
 
 ## 散歩の記録の扱い
 
-- 記録はアプリ専用の領域（`walk_history.json`）にだけ保存し、外部には送らない（`allowBackup=false`）。
+- 記録はアプリ専用の領域（`walk_history.json`）にだけ保存し、外部には送らない（`allowBackup=false`）。使ったチャンネルの名前と区間も記録に含む。
 - AI に話しかけ文を作らせるときは、日時・天気・雰囲気（「秋の夕方、雨、寺社の近く」のようなまとめ）・距離・訪問回数・スポット名・前回話した内容を送る。**既定では緯度経度や経路は AI に送らない**（天気の取得には現在地の緯度経度を Open-Meteo に送る）。
 - 設定「AI に緯度経度と歩いた経路を送る」をオンにしたときだけ、スポットの解説にスポットの緯度経度を、話しかけに現在地の緯度経度と今回歩いた経路（最大 20 点に間引いたもの）を加えて AI に送る。
 - 地図にスポットまでのルートを表示するときは、現在地とスポットの緯度経度を経路検索サービス（FOSSGIS の OSRM）に送る。この設定には左右されない。

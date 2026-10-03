@@ -64,7 +64,7 @@ AI に送るのは「システムプロンプト」と「ユーザープロン�
 
 今までの文面を変えたいときは、枠の部分なら `prompts/` を、役割や話題なら `assets/channels/standard/prompts/` を直す。標準のチャンネルで組み立てたシステムプロンプトがチャンネル導入前と同じであることを `StationAssetsTest` が確かめているので、意図して文面を変えたときは、基準のファイル（`app/src/test/resources/prompt-baseline/`）も直す。
 
-「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と設定の「話しかけの頻度」（`TalkLevel`）で決まる。施設をどの条件で案内するかは `FacilityAdvisor`、天気の急変の判定は `WeatherChangeDetector` で決まる。
+「いつ話しかけるか」（間隔・優先順位・休憩の判定）はプロンプトではなく、コード（`WalkService`）と、選んでいるチャンネルの「話しかけの頻度」（`TalkLevel`）・「話しかける場面」で決まる。施設をどの条件で案内するかは `FacilityAdvisor`、天気の急変の判定は `WeatherChangeDetector` で決まる。
 
 ## 書き方
 
