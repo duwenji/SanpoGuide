@@ -80,6 +80,7 @@ fun MainScreen(
     viewModel: MainViewModel,
     hasLocationPermission: Boolean,
     onRequestPermission: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
     onToggleWalk: (walking: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
@@ -91,6 +92,7 @@ fun MainScreen(
     val spots by viewModel.spots.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val locationOff by viewModel.locationOff.collectAsStateWithLifecycle()
     val walking by viewModel.walking.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val facilities by viewModel.facilities.collectAsStateWithLifecycle()
@@ -145,6 +147,9 @@ fun MainScreen(
             }
             if (!settings.isConfigured) {
                 Banner("AIのAPIキーが未設定のため、簡易解説で動作しています。タップして設定", onOpenSettings)
+            }
+            if (locationOff) {
+                Banner("端末の位置情報がオフのため、現在地を取得できません。タップして設定を開く", onOpenLocationSettings)
             }
             error?.let {
                 Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {

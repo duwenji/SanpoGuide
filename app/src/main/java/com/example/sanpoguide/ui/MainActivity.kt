@@ -1,9 +1,11 @@
 package com.example.sanpoguide.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -60,6 +62,9 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         hasLocationPermission = hasLocationPermission,
                         onRequestPermission = ::requestPermissions,
+                        onOpenLocationSettings = {
+                            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                        },
                         onToggleWalk = { walking ->
                             if (walking) WalkService.stop(this) else WalkService.start(this)
                         },
@@ -72,6 +77,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (hasLocationPermission) viewModel.recheckLocationSetting()
     }
 
     private fun requestPermissions() {
