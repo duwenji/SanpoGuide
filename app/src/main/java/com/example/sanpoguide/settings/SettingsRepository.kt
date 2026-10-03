@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.core.content.edit
 import com.example.sanpoguide.guide.Provider
 import com.example.sanpoguide.station.StationOverrides
+import com.example.sanpoguide.station.format.GuideLength
+import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
+import com.example.sanpoguide.station.format.TalkEventKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,6 +76,10 @@ class SettingsRepository(context: Context) {
             settings.stationOverrides.forEach { (id, o) ->
                 o.talkLevel?.let { putString(stationPref(id, FIELD_TALK_LEVEL), it.name) }
                 o.moodTone?.let { putBoolean(stationPref(id, FIELD_MOOD_TONE), it) }
+                o.events?.let { putString(stationPref(id, FIELD_EVENTS), OverrideCodec.encode(it)) }
+                o.guideLength?.let { putString(stationPref(id, FIELD_GUIDE_LENGTH), it.json) }
+                o.sound?.let { putString(stationPref(id, FIELD_SOUND), it.json) }
+                o.prefer?.let { putString(stationPref(id, FIELD_PREFER), OverrideCodec.encode(it)) }
             }
             putBoolean(KEY_MOOD, settings.moodEnabled)
             putBoolean(KEY_AMBIENT, settings.ambientEnabled)
@@ -142,6 +150,10 @@ class SettingsRepository(context: Context) {
                 talkLevel = (all[stationPref(id, FIELD_TALK_LEVEL)] as? String)
                     ?.let { name -> TalkLevel.entries.firstOrNull { it.name == name } },
                 moodTone = all[stationPref(id, FIELD_MOOD_TONE)] as? Boolean,
+                events = OverrideCodec.decodeSet<TalkEventKind>(all[stationPref(id, FIELD_EVENTS)] as? String),
+                guideLength = OverrideCodec.decode<GuideLength>(all[stationPref(id, FIELD_GUIDE_LENGTH)] as? String),
+                sound = OverrideCodec.decode<SoundChoice>(all[stationPref(id, FIELD_SOUND)] as? String),
+                prefer = OverrideCodec.decodeSet<SpotKind>(all[stationPref(id, FIELD_PREFER)] as? String),
             )
         }.filterValues { !it.isEmpty }
     }
@@ -178,7 +190,11 @@ class SettingsRepository(context: Context) {
         const val STATION_PREFIX = "station_"
         const val FIELD_TALK_LEVEL = "talk_level"
         const val FIELD_MOOD_TONE = "mood_tone"
-        val FIELDS = listOf(FIELD_TALK_LEVEL, FIELD_MOOD_TONE)
+        const val FIELD_EVENTS = "events"
+        const val FIELD_GUIDE_LENGTH = "guide_length"
+        const val FIELD_SOUND = "sound"
+        const val FIELD_PREFER = "prefer"
+        val FIELDS = listOf(FIELD_TALK_LEVEL, FIELD_MOOD_TONE, FIELD_EVENTS, FIELD_GUIDE_LENGTH, FIELD_SOUND, FIELD_PREFER)
         const val STANDARD = "standard"
         const val KEY_MOOD = "mood"
         const val KEY_AMBIENT = "ambient"

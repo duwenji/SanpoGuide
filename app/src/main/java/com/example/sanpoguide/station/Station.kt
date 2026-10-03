@@ -4,6 +4,7 @@ import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.station.format.GuideLength
 import com.example.sanpoguide.station.format.Slot
 import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
 import com.example.sanpoguide.station.format.StationManifest
 import com.example.sanpoguide.station.format.StationPackage
 import com.example.sanpoguide.station.format.TalkEventKind
@@ -15,6 +16,11 @@ import com.example.sanpoguide.station.format.TalkEventKind
 data class StationOverrides(
     val talkLevel: TalkLevel? = null,
     val moodTone: Boolean? = null,
+    /** The events to talk on, as a whole (an empty set means none of the six). */
+    val events: Set<TalkEventKind>? = null,
+    val guideLength: GuideLength? = null,
+    val sound: SoundChoice? = null,
+    val prefer: Set<SpotKind>? = null,
 ) {
     val isEmpty: Boolean get() = this == StationOverrides()
 }
@@ -42,20 +48,39 @@ class Station(
     val defaultTalkLevel: TalkLevel get() = TalkLevel.valueOf(manifest.talkLevel.name)
 
     /** Whether the companion talks on [kind]. Weather turns, sunset and amenities aren't asked: they always speak. */
-    fun talksOn(kind: TalkEventKind): Boolean = kind in manifest.events
+    fun talksOn(kind: TalkEventKind): Boolean = kind in events
+    val events: Set<TalkEventKind> get() = overrides.events ?: manifest.events
 
-    /** Spot categories (`Poi.category`) to bring up first, and ones not to bring up on walks. */
-    val preferredCategories: Set<String> = manifest.prefer.map { it.category }.toSet()
-    val skippedCategories: Set<String> = manifest.skip.map { it.category }.toSet()
+    /** Spot kinds to bring up first, and ones not to bring up on walks (a kind the user prefers is never skipped). */
+    val prefer: Set<SpotKind> get() = overrides.prefer ?: manifest.prefer.toSet()
+    val skip: Set<SpotKind> get() = manifest.skip.toSet() - prefer
 
-    val guideLength: GuideLength get() = manifest.guideLength
+    /** The same as [prefer] and [skip], as `Poi.category` values. */
+    val preferredCategories: Set<String> get() = prefer.map { it.category }.toSet()
+    val skippedCategories: Set<String> get() = skip.map { it.category }.toSet()
+
+    val guideLength: GuideLength get() = overrides.guideLength ?: manifest.guideLength
 
     /** Whether the companion's tone follows the mood. */
     val moodTone: Boolean get() = overrides.moodTone ?: manifest.moodTone
 
-    val sound: SoundChoice get() = manifest.sound
+    val sound: SoundChoice get() = overrides.sound ?: manifest.sound
 
-    fun withOverrides(overrides: StationOverrides) = Station(pkg, standard, key, overrides)
+    /** Built-in channels can be adjusted by the user; a third party's are as its publisher made them (ADR-001). */
+    val isBuiltIn: Boolean get() = manifest.publisher == null
+
+    fun withOverrides(overrides: StationOverrides) =
+        Station(pkg, standard, key, if (isBuiltIn) normalize(overrides) else StationOverrides())
+
+    /** [overrides] without the values that equal this channel's own, so only real changes are kept. */
+    fun normalize(overrides: StationOverrides): StationOverrides = StationOverrides(
+        talkLevel = overrides.talkLevel?.takeIf { it != defaultTalkLevel },
+        moodTone = overrides.moodTone?.takeIf { it != manifest.moodTone },
+        events = overrides.events?.takeIf { it != manifest.events },
+        guideLength = overrides.guideLength?.takeIf { it != manifest.guideLength },
+        sound = overrides.sound?.takeIf { it != manifest.sound },
+        prefer = overrides.prefer?.takeIf { it != manifest.prefer.toSet() },
+    )
 
     fun slot(slot: Slot): String? = pkg.slots[slot] ?: standard.slots[slot]
 

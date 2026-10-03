@@ -60,6 +60,12 @@ import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
+import com.example.sanpoguide.station.Station
+import com.example.sanpoguide.station.StationLabels
+import com.example.sanpoguide.station.format.GuideLength
+import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
+import com.example.sanpoguide.station.format.TalkEventKind
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -193,6 +199,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (station.isBuiltIn) StationSettings(station, viewModel)
 
             SectionTitle("雰囲気・背景音・写真")
             SwitchRow(
@@ -415,6 +422,75 @@ private fun TestResult(test: TestState) {
             "接続できました（応答: ${test.reply}）", color = MaterialTheme.colorScheme.primary,
         )
         is TestState.Failed -> Text(test.message, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+/** The chosen built-in channel's own settings (docs/channels.md「利用者のカスタマイズ」). Its voice and topics can't be changed. */
+@Composable
+private fun StationSettings(station: Station, viewModel: SettingsViewModel) {
+    Text("話しかける場面", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TalkEventKind.entries.forEach { kind ->
+            FilterChip(
+                selected = station.talksOn(kind),
+                onClick = { viewModel.setEvent(kind, !station.talksOn(kind)) },
+                label = { Text(StationLabels.of(kind)) },
+            )
+        }
+    }
+    Text(
+        "天気の急変・日の入り・施設の案内は、安全のため、どのチャンネルでもお知らせします。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Text("解説の長さ", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GuideLength.entries.forEach { length ->
+            FilterChip(
+                selected = station.guideLength == length,
+                onClick = { viewModel.setGuideLength(length) },
+                label = { Text(StationLabels.of(length)) },
+            )
+        }
+    }
+
+    Text("優先する話題", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SpotKind.entries.forEach { kind ->
+            val on = kind in station.prefer
+            FilterChip(selected = on, onClick = { viewModel.setPrefer(kind, !on) }, label = { Text(kind.category) })
+        }
+    }
+    Text(
+        "近くに複数のスポットがあるとき、選んだ種類から先に話題にします。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    SwitchRow(
+        "話し方を雰囲気に合わせる", "時間帯・季節・天気・場所に合わせて、話しかけのトーンを変えます",
+        station.moodTone, viewModel::setMoodTone,
+    )
+
+    Text("背景音の種類", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SoundChoice.entries.forEach { sound ->
+            FilterChip(
+                selected = station.sound == sound,
+                onClick = { viewModel.setSound(sound) },
+                label = { Text(StationLabels.of(sound)) },
+            )
+        }
+    }
+    Text(
+        "背景音を流すかどうかと音量は、下の「散策中に背景音を流す」で決めます。「自動」は雰囲気に合わせて選びます。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    TextButton(onClick = viewModel::resetStation, enabled = !station.overrides.isEmpty) {
+        Text("「${station.name}」を初期値に戻す")
     }
 }
 

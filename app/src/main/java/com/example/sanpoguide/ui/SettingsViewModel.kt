@@ -15,6 +15,10 @@ import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
 import com.example.sanpoguide.station.Station
 import com.example.sanpoguide.station.StationOverrides
+import com.example.sanpoguide.station.format.GuideLength
+import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
+import com.example.sanpoguide.station.format.TalkEventKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,10 +63,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     /** The chosen channel as the draft would have it, with the user's changes applied. */
     fun draftStation(settings: GuideSettings): Station = stationRepo.select(settings)
 
-    /** Changes the chosen channel's talk level; choosing its own default drops the change. */
-    fun setTalkLevel(level: TalkLevel) = edit { s ->
+    // The chosen channel's settings (docs/channels.md「利用者のカスタマイズ」). Setting a value back to
+    // the channel's own drops the change, so a later default still reaches it.
+    fun setTalkLevel(level: TalkLevel) = editStation { _, o -> o.copy(talkLevel = level) }
+    fun setEvent(kind: TalkEventKind, on: Boolean) = editStation { st, o -> o.copy(events = if (on) st.events + kind else st.events - kind) }
+    fun setGuideLength(length: GuideLength) = editStation { _, o -> o.copy(guideLength = length) }
+    fun setMoodTone(on: Boolean) = editStation { _, o -> o.copy(moodTone = on) }
+    fun setSound(sound: SoundChoice) = editStation { _, o -> o.copy(sound = sound) }
+    fun setPrefer(kind: SpotKind, on: Boolean) = editStation { st, o -> o.copy(prefer = if (on) st.prefer + kind else st.prefer - kind) }
+    fun resetStation() = editStation { _, _ -> StationOverrides() }
+
+    private fun editStation(change: (Station, StationOverrides) -> StationOverrides) = edit { s ->
         val station = stationRepo.select(s)
-        val changed = station.overrides.copy(talkLevel = level.takeIf { it != station.defaultTalkLevel })
+        val changed = station.normalize(change(station, station.overrides))
         s.copy(stationOverrides = (s.stationOverrides - station.id) + if (changed.isEmpty) emptyMap() else mapOf(station.id to changed))
     }
     fun setMoodEnabled(on: Boolean) = edit { it.copy(moodEnabled = on) }

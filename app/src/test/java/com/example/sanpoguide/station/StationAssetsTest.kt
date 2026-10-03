@@ -7,7 +7,10 @@ import com.example.sanpoguide.history.StationSegment
 import com.example.sanpoguide.history.WalkRecord
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.settings.TalkLevel
+import com.example.sanpoguide.station.format.GuideLength
 import com.example.sanpoguide.station.format.Slot
+import com.example.sanpoguide.station.format.SoundChoice
+import com.example.sanpoguide.station.format.SpotKind
 import com.example.sanpoguide.station.format.TalkEventKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -81,6 +84,40 @@ class StationAssetsTest {
         assertEquals(TalkLevel.NORMAL, changed.defaultTalkLevel)
         assertFalse(changed.moodTone)
         assertTrue(standard.moodTone)
+    }
+
+    @Test
+    fun `every customizable setting applies on top of the channel`() {
+        val history = stations.first { it.id == "history" }
+        val changed = history.withOverrides(
+            StationOverrides(
+                events = setOf(TalkEventKind.START, TalkEventKind.FINISH, TalkEventKind.SPOT),
+                guideLength = GuideLength.SHORT,
+                sound = SoundChoice.TEMPLE,
+                prefer = setOf(SpotKind.GARDEN),
+            ),
+        )
+        assertTrue(changed.talksOn(TalkEventKind.SPOT))
+        assertFalse(changed.talksOn(TalkEventKind.MILESTONE))
+        assertEquals(setOf("庭園"), changed.preferredCategories)
+        assertEquals(SoundChoice.TEMPLE, changed.sound)
+        assertTrue(prompts.render(Prompts.Guide.SYSTEM, changed.guideSystemVars()).contains("100〜150字程度"))
+        // The voice is still the channel's own.
+        assertEquals(history.slot(Slot.GUIDE_PERSONA), changed.slot(Slot.GUIDE_PERSONA))
+    }
+
+    @Test
+    fun `only real changes are kept`() {
+        val history = stations.first { it.id == "history" }
+        val same = StationOverrides(
+            talkLevel = TalkLevel.NORMAL, moodTone = true, events = TalkEventKind.entries.toSet(),
+            guideLength = GuideLength.LONG, sound = SoundChoice.AUTO,
+            prefer = setOf(SpotKind.TEMPLE, SpotKind.SHRINE, SpotKind.HISTORIC, SpotKind.MUSEUM),
+        )
+        assertTrue(history.normalize(same).isEmpty)
+        assertEquals(StationOverrides(guideLength = GuideLength.NORMAL), history.normalize(same.copy(guideLength = GuideLength.NORMAL)))
+        // Turning every event off is a change too, not "no setting".
+        assertEquals(emptySet<TalkEventKind>(), history.normalize(StationOverrides(events = emptySet())).events)
     }
 
     @Test
