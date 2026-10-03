@@ -41,10 +41,11 @@ data class ListedAs(val id: String, val version: Int, val publisher: String)
 /**
  * The checks of API-003 ("確認の手順"), shared by the app and the review tools.
  *
- * Covers the files, `channel.json` and the prompt slots. Not here: unpacking the ZIP, the
- * publisher's signature (checked before this, once third-party channels arrive) and rendering
- * the prompts (the app's own test renders every channel with its templates). Resources and cues
- * aren't supported yet, so a package using them is turned away as [RejectCode.UNSUPPORTED_RESOURCE].
+ * Covers unpacking the ZIP ([checkArchive]), the files, the publisher's signature, `channel.json`
+ * and the prompt slots. Not here: the package's size and SHA-256 against the list (the caller has
+ * the list) and rendering the prompts ([com.example.sanpoguide.prompt.StationPrompts]). Resources
+ * and cues aren't supported yet, so a package using them is turned away as
+ * [RejectCode.UNSUPPORTED_RESOURCE].
  */
 object StationValidator {
     const val FORMAT = 1
@@ -57,13 +58,27 @@ object StationValidator {
     private val HEADING = Regex("(?m)^\\s*#")
     private val URL = Regex("https?://|www\\.", RegexOption.IGNORE_CASE)
 
-    fun check(files: StationFiles, origin: StationOrigin, listedAs: ListedAs? = null): StationCheck = try {
-        StationCheck.Ok(validate(files, origin, listedAs))
+    /**
+     * Checks a channel's files. A third-party package also needs [verifier] for its publisher's
+     * signature; built-in channels have none.
+     */
+    fun check(files: StationFiles, origin: StationOrigin, listedAs: ListedAs? = null, verifier: Ed25519Verifier? = null): StationCheck = try {
+        StationCheck.Ok(validate(files, origin, listedAs, verifier))
     } catch (e: Reject) {
         StationCheck.Rejected(e.code, e.message.orEmpty())
     }
 
-    private fun validate(files: StationFiles, origin: StationOrigin, listedAs: ListedAs?): StationPackage {
+    /** Unpacks a third-party package (API-003 確認の手順 2) and checks it like [check]. */
+    fun checkArchive(zip: ByteArray, listedAs: ListedAs? = null, verifier: Ed25519Verifier): StationCheck {
+        val files = try {
+            PackageArchive.open(zip)
+        } catch (e: ArchiveException) {
+            return StationCheck.Rejected(RejectCode.BAD_ARCHIVE, e.message.orEmpty())
+        }
+        return check(files, StationOrigin.THIRD_PARTY, listedAs, verifier)
+    }
+
+    private fun validate(files: StationFiles, origin: StationOrigin, listedAs: ListedAs?, verifier: Ed25519Verifier?): StationPackage {
         val paths = files.list()
         if (paths.size > MAX_FILES) reject(RejectCode.BAD_ARCHIVE, "${paths.size} files (max $MAX_FILES)")
         val totalBytes = paths.sumOf { files.read(it)?.size ?: 0 }
@@ -77,8 +92,23 @@ object StationValidator {
         }
         paths.firstOrNull { it !in allowed }?.let { reject(RejectCode.UNEXPECTED_FILE, it) }
         if (origin == StationOrigin.THIRD_PARTY && SIGNATURE !in paths) reject(RejectCode.BAD_SIGNATURE, "no $SIGNATURE")
+        val signed = if (origin == StationOrigin.THIRD_PARTY) {
+            requireNotNull(verifier) { "a third-party package needs a signature verifier" }
+            verifySignature(files, paths, verifier)
+        } else {
+            null
+        }
 
         val manifest = readManifest(json, origin)
+        if (signed != null) {
+            if (signed.channel != manifest.id || signed.version != manifest.version) {
+                reject(RejectCode.BAD_SIGNATURE, "signed for ${signed.channel}@${signed.version}, not ${manifest.id}@${manifest.version}")
+            }
+            // The key that signed must be the publisher the package and the list name (API-003 F-6).
+            if (signed.accountId != signed.publisher || signed.accountId != manifest.publisher) {
+                reject(RejectCode.PUBLISHER_MISMATCH, "signed by ${signed.accountId}, package says ${manifest.publisher}")
+            }
+        }
         if (listedAs != null) {
             if (manifest.id != listedAs.id || manifest.version != listedAs.version) {
                 reject(RejectCode.BAD_MANIFEST, "${manifest.id}@${manifest.version} is listed as ${listedAs.id}@${listedAs.version}")
@@ -94,6 +124,46 @@ object StationValidator {
             }
         }
         return StationPackage(manifest, readSlots(files, paths))
+    }
+
+    /**
+     * `signature.json` (API-003 F-6): the publisher's Ed25519 signature over the SHA-256 of every
+     * other file. Every file must be listed and match, and nothing else may be listed.
+     */
+    private fun verifySignature(files: StationFiles, paths: List<String>, verifier: Ed25519Verifier): SignedFiles {
+        val doc = try {
+            JSONObject(decode(files.read(SIGNATURE)!!, SIGNATURE, RejectCode.BAD_SIGNATURE))
+        } catch (e: JSONException) {
+            reject(RejectCode.BAD_SIGNATURE, "$SIGNATURE: ${e.message}")
+        }
+        fun bytes(key: String): ByteArray =
+            decodeBase64Url(doc.optString(key, "")) ?: reject(RejectCode.BAD_SIGNATURE, "$SIGNATURE: $key is not base64url")
+        val payloadBytes = bytes("payload")
+        val publicKey = bytes("publisherKey")
+        if (publicKey.size != 32) reject(RejectCode.BAD_SIGNATURE, "publisherKey is not 32 bytes")
+        if (!verifier.verify(publicKey, payloadBytes, bytes("sig"))) reject(RejectCode.BAD_SIGNATURE, "the signature does not verify")
+
+        val payload = try {
+            JSONObject(decode(payloadBytes, "$SIGNATURE payload", RejectCode.BAD_SIGNATURE))
+        } catch (e: JSONException) {
+            reject(RejectCode.BAD_SIGNATURE, "payload: ${e.message}")
+        }
+        if (payload.optString("type") != "channel-package") reject(RejectCode.BAD_SIGNATURE, "payload type ${payload.optString("type")}")
+        val listed = payload.optJSONObject("files") ?: reject(RejectCode.BAD_SIGNATURE, "payload has no files")
+        val signedPaths = listed.keys().asSequence().toSet() // keys(): Android's org.json has no keySet()
+        val present = paths.filter { it != SIGNATURE }.toSet()
+        (present - signedPaths).firstOrNull()?.let { reject(RejectCode.BAD_SIGNATURE, "$it is not signed") }
+        (signedPaths - present).firstOrNull()?.let { reject(RejectCode.BAD_SIGNATURE, "$it is signed but missing") }
+        for (path in present) {
+            if (sha256(files.read(path)!!).hex() != listed.optString(path)) reject(RejectCode.BAD_SIGNATURE, "$path differs from what was signed")
+        }
+        val version = payload.opt("version")
+        return SignedFiles(
+            channel = payload.optString("channel"),
+            version = if (version is Int) version else reject(RejectCode.BAD_SIGNATURE, "payload version is not an integer"),
+            publisher = payload.optString("publisher"),
+            accountId = AccountIds.of(publicKey),
+        )
     }
 
     private fun parseManifest(files: StationFiles): JSONObject {
