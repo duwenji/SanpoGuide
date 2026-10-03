@@ -13,6 +13,8 @@ import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.settings.Thresholds
+import com.example.sanpoguide.station.Station
+import com.example.sanpoguide.station.StationOverrides
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +33,10 @@ sealed interface TestState {
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = (application as SanpoApp).settings
     private val prompts = (application as SanpoApp).prompts
+    private val stationRepo = (application as SanpoApp).stations
+
+    /** Every channel, in the order to list them. */
+    val stations: List<Station> = stationRepo.all
 
     private val _draft = MutableStateFlow(repo.settings.value)
     val draft: StateFlow<GuideSettings> = _draft.asStateFlow()
@@ -48,7 +54,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setApiKey(key: String) = edit { it.copy(apiKeys = it.apiKeys + (it.provider to key)) }
     fun setModel(model: String) = edit { it.copy(models = it.models + (it.provider to model)) }
     fun setCustomBaseUrl(url: String) = edit { it.copy(customBaseUrl = url) }
-    fun setTalkLevel(level: TalkLevel) = edit { it.copy(talkLevel = level) }
+    fun selectStation(id: String) = edit { it.copy(stationId = id) }
+
+    /** The chosen channel as the draft would have it, with the user's changes applied. */
+    fun draftStation(settings: GuideSettings): Station = stationRepo.select(settings)
+
+    /** Changes the chosen channel's talk level; choosing its own default drops the change. */
+    fun setTalkLevel(level: TalkLevel) = edit { s ->
+        val station = stationRepo.select(s)
+        val changed = station.overrides.copy(talkLevel = level.takeIf { it != station.defaultTalkLevel })
+        s.copy(stationOverrides = (s.stationOverrides - station.id) + if (changed.isEmpty) emptyMap() else mapOf(station.id to changed))
+    }
     fun setMoodEnabled(on: Boolean) = edit { it.copy(moodEnabled = on) }
     fun setAmbientEnabled(on: Boolean) = edit { it.copy(ambientEnabled = on) }
     fun setAmbientVolume(percent: Int) = edit { it.copy(ambientVolume = percent) }

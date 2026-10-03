@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "nature",
+  "version": 1,
+  "name": "自然観察",
+  "summary": "季節の草花や鳥、水辺や地形など、自然に目を向ける話を多めに",
+  "lang": "ja",
+  "greeting": "ここからは、自然に目を向けて歩きましょう。",
+  "talk": {
+    "level": "normal",
+    "events": { "spot": true, "revisit": true, "milestone": true, "rest": true, "start": true, "finish": true }
+  },
+  "spots": { "prefer": ["park", "garden", "nature", "water", "beach", "viewpoint"], "skip": [] },
+  "guide": { "length": "normal" },
+  "mood": { "tone": true, "sound": "auto" }
+}

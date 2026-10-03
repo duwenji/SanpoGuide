@@ -3,10 +3,13 @@ package com.example.sanpoguide.station
 import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.station.format.DirectoryStationFiles
+import com.example.sanpoguide.settings.TalkLevel
 import com.example.sanpoguide.station.format.Slot
+import com.example.sanpoguide.station.format.TalkEventKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -50,6 +53,28 @@ class StationAssetsTest {
             baseline("companion_system") + "\n\n" + guard,
             prompts.render(Prompts.Talk.SYSTEM, standard.companionSystemVars()),
         )
+    }
+
+    @Test
+    fun `the built-in channels differ as designed`() {
+        val byId = stations.associateBy { it.id }
+        val quiet = byId.getValue("quiet")
+        assertEquals(TalkLevel.QUIET, quiet.talkLevel)
+        assertEquals(setOf(TalkEventKind.START, TalkEventKind.FINISH), TalkEventKind.entries.filter(quiet::talksOn).toSet())
+        assertEquals(setOf("寺院", "神社", "史跡", "博物館"), byId.getValue("history").preferredCategories)
+        assertTrue("公園" in byId.getValue("nature").preferredCategories)
+        assertTrue(prompts.render(Prompts.Guide.SYSTEM, byId.getValue("history").guideSystemVars()).contains("300〜450字程度"))
+        // A channel without slots of its own speaks with the standard channel's voice.
+        assertEquals(standard.slot(Slot.GUIDE_PERSONA), quiet.slot(Slot.GUIDE_PERSONA))
+    }
+
+    @Test
+    fun `the user's changes apply on top of the channel`() {
+        val changed = standard.withOverrides(StationOverrides(talkLevel = TalkLevel.CHATTY, moodTone = false))
+        assertEquals(TalkLevel.CHATTY, changed.talkLevel)
+        assertEquals(TalkLevel.NORMAL, changed.defaultTalkLevel)
+        assertFalse(changed.moodTone)
+        assertTrue(standard.moodTone)
     }
 
     @Test

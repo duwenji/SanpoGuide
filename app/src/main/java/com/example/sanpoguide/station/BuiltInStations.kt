@@ -17,7 +17,7 @@ object BuiltInStations {
     const val STANDARD = "standard"
 
     /** In the order the app lists them. */
-    val IDS = listOf(STANDARD)
+    val IDS = listOf(STANDARD, "history", "nature", "quiet")
 
     /** Loads every built-in channel; [files] gives the files of one channel by id. */
     fun load(files: (String) -> StationFiles): List<Station> {

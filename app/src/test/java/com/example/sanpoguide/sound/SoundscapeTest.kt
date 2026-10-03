@@ -5,6 +5,7 @@ import com.example.sanpoguide.mood.Place
 import com.example.sanpoguide.mood.Season
 import com.example.sanpoguide.mood.Sky
 import com.example.sanpoguide.mood.TimeOfDay
+import com.example.sanpoguide.station.format.SoundChoice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,6 +33,14 @@ class SoundscapeTest {
         assertEquals(Soundscape.BIRDS, Soundscape.forMood(mood(sky = null)))
         assertEquals(Soundscape.WIND, Soundscape.forMood(mood(place = Place.TOWN)))
         assertEquals(Soundscape.WIND, Soundscape.forMood(mood(season = Season.WINTER, place = Place.PARK)))
+    }
+
+    @Test
+    fun `a channel can fix the sound or leave it to the mood`() {
+        val rainyTemple = mood(sky = Sky.RAIN, place = Place.SHRINE_TEMPLE)
+        assertEquals(Soundscape.RAIN, Soundscape.of(SoundChoice.AUTO, rainyTemple))
+        assertEquals(Soundscape.TEMPLE, Soundscape.of(SoundChoice.TEMPLE, rainyTemple))
+        assertEquals(Soundscape.BIRDS, Soundscape.of(SoundChoice.BIRDS, mood(time = TimeOfDay.NIGHT)))
     }
 }
 

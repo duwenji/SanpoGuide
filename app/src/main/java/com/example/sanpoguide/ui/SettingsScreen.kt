@@ -155,25 +155,48 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 )
             }
 
-            SectionTitle("散歩中の話しかけ")
+            val station = viewModel.draftStation(draft)
+            SectionTitle("チャンネル")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                viewModel.stations.forEach { s ->
+                    FilterChip(
+                        selected = station.id == s.id,
+                        onClick = { viewModel.selectStation(s.id) },
+                        label = { Text(s.name) },
+                    )
+                }
+            }
+            Text(
+                station.manifest.summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "チャンネルによって、語り手や話題、話しかける場面が変わります。" +
+                    "天気の急変・日の入り・施設の案内は、どのチャンネルでもお知らせします。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            SectionTitle("散歩中の話しかけ（${station.name}）")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TalkLevel.entries.forEach { level ->
                     FilterChip(
-                        selected = draft.talkLevel == level,
+                        selected = station.talkLevel == level,
                         onClick = { viewModel.setTalkLevel(level) },
                         label = { Text(level.label) },
                     )
                 }
             }
             Text(
-                "スポットの案内のほかに、歩いた距離や時間、休憩のときに話しかける頻度です。",
+                "スポットの案内のほかに、歩いた距離や時間、休憩のときに話しかける頻度です。チャンネルごとに保存します。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             SectionTitle("雰囲気・背景音・写真")
             SwitchRow(
-                "雰囲気に合わせる", "時間帯・季節・天気・場所に合わせて、画面の色と上部の絵、話しかけのトーンを変えます",
+                "画面を雰囲気に合わせる", "時間帯・季節・天気・場所に合わせて、画面の色と散策中の上部の絵を変えます",
                 draft.moodEnabled, viewModel::setMoodEnabled,
             )
             SwitchRow(

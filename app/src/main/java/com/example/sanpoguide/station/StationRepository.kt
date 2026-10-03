@@ -1,14 +1,25 @@
 package com.example.sanpoguide.station
 
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.sanpoguide.settings.GuideSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
-/**
- * The available channels and the one in use. For now only the standard channel exists, so the
- * app behaves as before; choosing and switching channels come next (docs/channels.md「進め方」).
- */
-class StationRepository(val all: List<Station>) {
-    private val _current = MutableStateFlow(all.first { it.manifest.id == BuiltInStations.STANDARD })
-    val current: StateFlow<Station> = _current.asStateFlow()
+/** The available channels, and the one in use with the user's changes applied. */
+class StationRepository(val all: List<Station>, settings: StateFlow<GuideSettings>, scope: CoroutineScope) {
+    val standard: Station = all.first { it.id == BuiltInStations.STANDARD }
+
+    val current: StateFlow<Station> = settings
+        .map(::select)
+        .stateIn(scope, SharingStarted.Eagerly, select(settings.value))
+
+    /** The chosen channel, or the standard one if it's gone (e.g. removed in an update). */
+    fun select(settings: GuideSettings): Station {
+        val station = all.firstOrNull { it.id == settings.stationId } ?: standard
+        return station.withOverrides(settings.stationOverrides[station.id] ?: StationOverrides())
+    }
+
+    fun byId(id: String): Station = all.firstOrNull { it.id == id } ?: standard
 }

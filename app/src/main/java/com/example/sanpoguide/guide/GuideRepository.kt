@@ -25,7 +25,7 @@ class GuideRepository(
         val share = settings.shareLocationWithAi
         // Each channel narrates in its own way, so a narration made for one isn't reused by another.
         val channel = station()
-        val cacheKey = "${settings.provider}/${settings.model()}/${channel.key}/${poi.id}/$share"
+        val cacheKey = "${settings.provider}/${settings.model()}/${channel.key}/${channel.guideLength}/${poi.id}/$share"
         cache[cacheKey]?.let { return it }
         val text = clientFor(settings).generate(
             prompts.render(Prompts.Guide.SYSTEM, channel.guideSystemVars()),

@@ -18,6 +18,8 @@ import com.example.sanpoguide.R
 import com.example.sanpoguide.SanpoApp
 import com.example.sanpoguide.companion.FacilityAdvice
 import com.example.sanpoguide.companion.FacilityAdvisor
+import com.example.sanpoguide.companion.SpotCandidate
+import com.example.sanpoguide.companion.SpotChooser
 import com.example.sanpoguide.companion.TalkEvent
 import com.example.sanpoguide.companion.WeatherChangeDetector
 import com.example.sanpoguide.companion.WeatherChangeKind
@@ -30,6 +32,7 @@ import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.sound.AmbientPlayer
 import com.example.sanpoguide.sound.Soundscape
+import com.example.sanpoguide.station.format.TalkEventKind
 import com.example.sanpoguide.ui.MainActivity
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -121,14 +124,14 @@ class WalkService : LifecycleService() {
 
     /** Background sound follows the mood and the settings; the player is made on first use. */
     private fun startAmbient() = lifecycleScope.launch {
-        combine(app.settings.settings, app.mood.mood, ::Pair).collect { (settings, mood) ->
+        combine(app.settings.settings, app.mood.mood, app.stations.current, ::Triple).collect { (settings, mood, station) ->
             val player = ambient ?: if (settings.ambientEnabled) {
                 AmbientPlayer(this@WalkService, app.speaker.speaking).also { ambient = it }
             } else {
                 return@collect
             }
             player.set(
-                Soundscape.forMood(mood).takeIf { settings.ambientEnabled },
+                Soundscape.of(station.sound, mood).takeIf { settings.ambientEnabled },
                 settings.ambientVolume, settings.ambientEarphonesOnly,
             )
         }
@@ -143,7 +146,9 @@ class WalkService : LifecycleService() {
             if (!greeted) {
                 greeted = true
                 refreshWeather(location)
-                talk { speakLine(app.companion.say(TalkEvent.Start, s, weather)) }
+                if (app.stations.current.value.talksOn(TalkEventKind.START)) {
+                    talk { speakLine(app.companion.say(TalkEvent.Start, s, weather)) }
+                }
             }
             try {
                 app.spots.onLocation(location)
@@ -160,7 +165,8 @@ class WalkService : LifecycleService() {
         val location = lastLocation ?: return
         // Let the current line finish before starting another.
         if (app.speaker.isSpeaking) return
-        val level = app.settings.settings.value.talkLevel
+        val station = app.stations.current.value
+        val level = station.talkLevel
         val limits = app.settings.settings.value.thresholds
         val now = System.currentTimeMillis()
 
@@ -186,17 +192,19 @@ class WalkService : LifecycleService() {
         val stationary = s.restMinutes(now) >= STATIONARY_MINUTES
         if (!stationary && now - s.lastSpotTalkAt >= level.spotGapMs) {
             // One spot per tick, by distance from the user (spots' distances to each other don't matter).
-            // The ones not picked stay candidates: they get their turn once the gap passes, if still in reach.
-            val spot = app.spots.spots.value
+            val candidates = app.spots.spots.value
                 .filter { poi -> poi.id !in s.talkedAbout && s.visits.none { it.matches(poi) } }
                 .map { it to it.distanceFrom(location) }
                 .filter { (_, d) -> d <= ANNOUNCE_RADIUS_M }
-                .sortedWith(compareByDescending<Pair<Poi, Float>> { it.first.notability }.thenBy { it.second })
-                .firstOrNull()
+                .map { (poi, d) -> SpotCandidate(poi, d, app.history.visitsTo(poi, excludingWalk = s.id).isNotEmpty()) }
+            val spot = SpotChooser.pick(
+                candidates, station.preferredCategories, station.skippedCategories,
+                newSpots = station.talksOn(TalkEventKind.SPOT), revisits = station.talksOn(TalkEventKind.REVISIT),
+            )
             if (spot != null) {
                 talk {
                     s.lastSpotTalkAt = now
-                    talkAboutSpot(s, spot.first, spot.second.toInt())
+                    talkAboutSpot(s, spot.poi, spot.distanceM.toInt())
                 }
                 return
             }
@@ -233,7 +241,7 @@ class WalkService : LifecycleService() {
         }
 
         val restMinutes = s.restMinutes(now)
-        if (level.remarkOnRest && restMinutes >= REST_MINUTES && !s.restRemarked) {
+        if (level.remarkOnRest && station.talksOn(TalkEventKind.REST) && restMinutes >= REST_MINUTES && !s.restRemarked) {
             talk {
                 s.markRestRemarked()
                 speakLine(app.companion.say(TalkEvent.Rest(restMinutes), s, weather))
@@ -244,10 +252,17 @@ class WalkService : LifecycleService() {
         if (walkedSinceMilestone >= level.milestoneDistanceM ||
             (now - s.lastMilestoneAt >= level.milestoneIntervalMs && walkedSinceMilestone > 100)
         ) {
-            talk {
+            if (station.talksOn(TalkEventKind.MILESTONE)) {
+                talk {
+                    s.lastMilestoneAt = now
+                    s.lastMilestoneDistanceM = s.distanceM
+                    speakLine(app.companion.say(TalkEvent.Milestone, s, weather))
+                    saveProgress(s)
+                }
+            } else {
+                // Still a checkpoint for the history, so a quiet walk isn't lost if the service dies.
                 s.lastMilestoneAt = now
                 s.lastMilestoneDistanceM = s.distanceM
-                speakLine(app.companion.say(TalkEvent.Milestone, s, weather))
                 saveProgress(s)
             }
         }
@@ -325,8 +340,10 @@ class WalkService : LifecycleService() {
         val lastWeather = weather
         app.feed.endWalk()
         if (record.durationMs < MIN_SAVED_WALK_MS && record.visits.isEmpty()) return
+        val summarize = app.stations.current.value.talksOn(TalkEventKind.FINISH)
         app.appScope.launch {
             app.history.save(record)
+            if (!summarize) return@launch
             val line = app.companion.say(TalkEvent.Finish(record), null, lastWeather)
             app.feed.add(Utterance(System.currentTimeMillis(), line))
             app.speaker.speak(line)
