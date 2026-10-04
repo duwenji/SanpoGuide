@@ -89,6 +89,8 @@ dependencies {
     // Ed25519 from Android 8 (the platform has it only from 13): third-party channels' signatures
     // (ADR-001 T-5), and later API-001.
     implementation("com.google.crypto.tink:tink-android:1.23.0")
+    // Test tickets' QR codes (API-002): Google's scanner UI, so the app needs no camera permission.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     testImplementation("junit:junit:4.13.2")
     // The real org.json; Android's is a stub in local unit tests.

@@ -34,7 +34,7 @@ fun StationPicker(current: Station, stations: List<Station>, onChoose: (String) 
     Box(modifier) {
         AssistChip(
             onClick = { open = true },
-            label = { Text("チャンネル: ${current.name}") },
+            label = { Text("チャンネル: ${current.displayName}") },
             leadingIcon = { Icon(Icons.Filled.Radio, contentDescription = null, Modifier.size(AssistChipDefaults.IconSize)) },
             trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = "チャンネルを選ぶ") },
         )
@@ -43,7 +43,7 @@ fun StationPicker(current: Station, stations: List<Station>, onChoose: (String) 
                 DropdownMenuItem(
                     text = {
                         Column(Modifier.padding(vertical = 4.dp)) {
-                            Text(station.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(station.displayName, style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 station.manifest.summary,
                                 style = MaterialTheme.typography.bodySmall,

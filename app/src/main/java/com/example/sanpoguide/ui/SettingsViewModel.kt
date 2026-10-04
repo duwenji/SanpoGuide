@@ -22,7 +22,10 @@ import com.example.sanpoguide.station.format.TalkEventKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -38,6 +41,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val repo = (application as SanpoApp).settings
     private val prompts = (application as SanpoApp).prompts
     private val stationRepo = (application as SanpoApp).stations
+
+    /** Saved at once (not part of the draft). */
+    val developerMode: StateFlow<Boolean> = repo.settings.map { it.developerMode }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.settings.value.developerMode)
+    fun setDeveloperMode(on: Boolean) = repo.setDeveloperMode(on)
 
     /** Every channel usable now, in the order to list them. */
     val stations: StateFlow<List<Station>> = stationRepo.list

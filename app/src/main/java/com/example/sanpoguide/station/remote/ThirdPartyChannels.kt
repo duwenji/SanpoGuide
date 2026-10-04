@@ -49,7 +49,13 @@ class OkHttpProviderHttp(private val client: OkHttpClient = OkHttpClient.Builder
  * flows for the screens. Lists are fetched at start-up and when a walk starts, if a day has passed;
  * never during a walk (API-002 取得の時期).
  */
-class ThirdPartyChannels(context: Context, private val standard: StationPackage, private val scope: CoroutineScope) {
+class ThirdPartyChannels(
+    context: Context,
+    private val standard: StationPackage,
+    private val scope: CoroutineScope,
+    /** Test tickets are read, and trial channels offered, only in developer mode (API-002 試用チケット). */
+    private val developerMode: StateFlow<Boolean>,
+) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
     private val sync = ChannelSync(
         store = ChannelStore(File(context.filesDir, "channels")),
@@ -71,12 +77,16 @@ class ThirdPartyChannels(context: Context, private val standard: StationPackage,
     private val _notices = MutableStateFlow<List<ChannelNotice>>(emptyList())
     val notices: StateFlow<List<ChannelNotice>> = _notices.asStateFlow()
 
+    private val _trials = MutableStateFlow<List<TrialChannel>>(emptyList())
+    /** Channels read from test tickets, for the developer section. */
+    val trials: StateFlow<List<TrialChannel>> = _trials.asStateFlow()
+
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     init {
-        // Publish what is on the device before any fetching.
-        scope.launch { exec { } }
+        // Publish what is on the device before any fetching, and again when developer mode turns.
+        scope.launch { developerMode.collect { exec { } } }
     }
 
     /** At start-up and when a walk starts: fetch what is due (packages only on an unmetered network). */
@@ -99,6 +109,11 @@ class ThirdPartyChannels(context: Context, private val standard: StationPackage,
 
     suspend fun dismissNotices() = exec { dismissNotices() }
 
+    /** Reads a test ticket; returns the trial channel's id. Throws [ChannelSyncException] with the reason to show. */
+    suspend fun loadTicket(json: String): String = exec { loadTicket(json, developerMode.value) }
+
+    suspend fun removeTrial(providerId: String, channelId: String) = exec { removeTrial(providerId, channelId) }
+
     /** Runs [work] alone on the IO dispatcher, then publishes the new state, even when [work] throws. */
     private suspend fun <T> exec(work: ChannelSync.() -> T): T = lock.withLock {
         _busy.value = true
@@ -107,11 +122,12 @@ class ThirdPartyChannels(context: Context, private val standard: StationPackage,
                 try {
                     sync.work()
                 } finally {
-                    val stations = sync.stations(standard)
+                    val stations = sync.stations(standard, developerMode.value)
                     val providers = sync.providers()
                     _stations.value = stations
                     _providers.value = providers
                     _notices.value = sync.state.notices
+                    _trials.value = sync.state.trials
                 }
             }
         } finally {

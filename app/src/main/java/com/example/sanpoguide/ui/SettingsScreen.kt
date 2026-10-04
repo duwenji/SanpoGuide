@@ -1,5 +1,6 @@
 package com.example.sanpoguide.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -41,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.sanpoguide.BuildConfig
 import com.example.sanpoguide.guide.Provider
 import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.settings.TalkLevel
@@ -169,7 +172,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit, onOpenChan
                     FilterChip(
                         selected = station.id == s.id,
                         onClick = { viewModel.selectStation(s.id) },
-                        label = { Text(s.name) },
+                        label = { Text(s.displayName) },
                     )
                 }
             }
@@ -346,7 +349,45 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit, onOpenChan
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            DeveloperSection(viewModel, onOpenChannels)
         }
+    }
+}
+
+/**
+ * The version; tapping it seven times turns developer mode on (as Android's own), for publishers
+ * trying their channel from a test ticket before review (API-002 試用チケット).
+ */
+@Composable
+private fun DeveloperSection(viewModel: SettingsViewModel, onOpenChannels: () -> Unit) {
+    val developerMode by viewModel.developerMode.collectAsStateWithLifecycle()
+    var taps by remember { mutableIntStateOf(0) }
+    Text(
+        "バージョン ${BuildConfig.VERSION_NAME}" + when {
+            developerMode -> "（開発者モード）"
+            taps in 3..6 -> "（あと ${7 - taps} 回で開発者モード）"
+            else -> ""
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = !developerMode) {
+            taps += 1
+            if (taps >= 7) viewModel.setDeveloperMode(true)
+        }.padding(vertical = 8.dp),
+    )
+    if (developerMode) {
+        SectionTitle("開発者向け")
+        SwitchRow(
+            "開発者モード",
+            "配信元が審査の前に、自分のチャンネルを試用チケット（QR コード）で試すためのものです。オフにすると、試用中のチャンネルは使えなくなります",
+            true,
+        ) { on ->
+            if (!on) {
+                taps = 0
+                viewModel.setDeveloperMode(false)
+            }
+        }
+        OutlinedButton(onClick = onOpenChannels) { Text("試用チケットを読み込む") }
     }
 }
 

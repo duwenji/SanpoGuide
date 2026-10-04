@@ -13,11 +13,13 @@ import com.example.sanpoguide.station.format.ProviderInfo
 import com.example.sanpoguide.station.format.StationCheck
 import com.example.sanpoguide.station.format.StationPackage
 import com.example.sanpoguide.station.format.StationValidator
+import org.json.JSONObject
 import java.io.IOException
 import java.net.URI
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import java.util.Base64
 
 /** Fetches a URL, giving up past [maxBytes] (API-002 大きさの上限). Blocking; call it off the main thread. */
 fun interface ProviderHttp {
@@ -99,7 +101,14 @@ class ChannelSync(
 
     fun removeProvider(providerId: String) {
         state.installed.filter { it.provider == providerId }.forEach { store.deletePackage(it.sha256) }
-        update { s -> s.copy(providers = s.providers.filter { it.id != providerId }, installed = s.installed.filter { it.provider != providerId }) }
+        state.trials.filter { it.provider == providerId }.forEach { store.deletePackage(it.sha256) }
+        update { s ->
+            s.copy(
+                providers = s.providers.filter { it.id != providerId },
+                installed = s.installed.filter { it.provider != providerId },
+                trials = s.trials.filter { it.provider != providerId },
+            )
+        }
     }
 
     fun setEnabled(providerId: String, enabled: Boolean) = updateProvider(providerId) { it.copy(enabled = enabled) }
@@ -110,6 +119,7 @@ class ChannelSync(
             if (p.enabled && (p.triedAt == null || Duration.between(p.triedAt, now()) >= REFRESH_EVERY)) refresh(p.id, unmetered)
         }
         noticeExpiredLists()
+        dropExpiredTrials()
     }
 
     fun refreshAll(unmetered: Boolean) {
@@ -221,7 +231,10 @@ class ChannelSync(
      * The third-party channels usable now: installed, from an enabled provider whose last list is
      * still valid, still listed and not withdrawn, and whose package still checks out.
      */
-    fun stations(standard: StationPackage): List<Station> = state.installed.mapNotNull { c ->
+    fun stations(standard: StationPackage, developerMode: Boolean = false): List<Station> = installedStations(standard) +
+        if (developerMode) trialStations(standard) else emptyList()
+
+    private fun installedStations(standard: StationPackage): List<Station> = state.installed.mapNotNull { c ->
         val provider = state.providers.firstOrNull { it.id == c.provider && it.enabled } ?: return@mapNotNull null
         val (info, list) = validList(c.provider) ?: return@mapNotNull null
         val entry = list.channels.firstOrNull { it.id == c.id } ?: return@mapNotNull null
@@ -261,6 +274,78 @@ class ChannelSync(
     }
 
     fun dismissNotices() = update { it.copy(notices = emptyList()) }
+
+    // ---- test tickets (API-002 試用チケット) ----
+
+    /**
+     * Reads a test ticket from a QR code: signed by a provider the user added, valid now (7 days at
+     * most), and only in developer mode. The package is fetched and checked like a listed one, and
+     * must be the ticket's channel by the ticket's publisher. Returns the trial's station id.
+     */
+    fun loadTicket(json: String, developerMode: Boolean): String {
+        if (!developerMode) throw ChannelSyncException("試用チケットは開発者モードのときだけ読み込めます（ticket_invalid）")
+        val providerId = runCatching { ticketProvider(json) }.getOrNull() ?: throw ChannelSyncException("試用チケットとして読めません（ticket_invalid）")
+        val record = state.providers.firstOrNull { it.id == providerId } ?: throw ChannelSyncException("この試用チケットの提供元（$providerId）を先に足してください")
+        val info = runCatching { docs.discovery(record.discovery ?: "", record.id) }.getOrNull()
+            ?: throw ChannelSyncException("提供元の情報がまだありません。「今すぐ確かめる」を押してから読み込んでください")
+        val ticket = try {
+            docs.testTicket(json, info.keyset, now())
+        } catch (e: ProviderException) {
+            throw ChannelSyncException("試用チケットを確かめられませんでした（${e.message}）")
+        }
+        if (ticket.pkg.format != 1) throw ChannelSyncException("このアプリでは使えない形式のチャンネルです")
+        val bytes = try {
+            http.get(checkedUrl(ticket.pkg.url), minOf(ticket.pkg.size, ProviderDocuments.MAX_PACKAGE_BYTES))
+        } catch (e: IOException) {
+            throw ChannelSyncException("パッケージを取得できませんでした（${e.message}）")
+        }
+        if (bytes.size != ticket.pkg.size || sha256(bytes) != ticket.pkg.sha256) throw ChannelSyncException("パッケージがチケットと一致しません（hash_mismatch）")
+        val pkg = when (val check = StationValidator.checkArchive(bytes, null, verifier)) {
+            is StationCheck.Rejected -> throw ChannelSyncException("パッケージの確認に失敗しました（package_rejected: ${check.code.json}）")
+            is StationCheck.Ok -> check.station
+        }
+        if (pkg.manifest.id != ticket.channel || pkg.manifest.publisher != ticket.publisher) {
+            throw ChannelSyncException("パッケージがチケットのチャンネル・配信元と違います（ticket_invalid）")
+        }
+        store.writePackage(ticket.pkg.sha256, bytes)
+        val trial = TrialChannel(providerId, ticket.channel, pkg.manifest.version, ticket.publisher, ticket.pkg.sha256, pkg.manifest.name, ticket.expiresAt)
+        val replaced = state.trials.filter { it.provider == providerId && it.id == ticket.channel }
+        update { s -> s.copy(trials = s.trials - replaced.toSet() + trial) }
+        replaced.filter { it.sha256 != trial.sha256 }.forEach { store.deletePackage(it.sha256) }
+        return trialId(trial)
+    }
+
+    fun removeTrial(providerId: String, channelId: String) {
+        val gone = state.trials.filter { it.provider == providerId && it.id == channelId }
+        gone.forEach { store.deletePackage(it.sha256) }
+        update { s -> s.copy(trials = s.trials - gone.toSet()) }
+    }
+
+    private fun ticketProvider(json: String): String {
+        val payload = Base64.getUrlDecoder().decode(JSONObject(json).getString("payload"))
+        return JSONObject(String(payload, Charsets.UTF_8)).getString("provider")
+    }
+
+    private fun trialId(t: TrialChannel) = "trial:${t.provider}/${t.id}"
+
+    private fun trialStations(standard: StationPackage): List<Station> = state.trials.mapNotNull { t ->
+        if (!now().isBefore(t.expiresAt)) return@mapNotNull null
+        val provider = state.providers.firstOrNull { it.id == t.provider } ?: return@mapNotNull null
+        val zip = store.readPackage(t.sha256) ?: return@mapNotNull null
+        val pkg = (StationValidator.checkArchive(zip, null, verifier) as? StationCheck.Ok)?.station ?: return@mapNotNull null
+        Station(
+            pkg, standard, key = "${trialId(t)}@${t.version}#${t.sha256.take(8)}", id = trialId(t),
+            source = StationSource(provider.id, provider.name ?: provider.id, t.publisher, trial = true),
+        )
+    }
+
+    /** Trials whose ticket expired go, package and all. */
+    private fun dropExpiredTrials() {
+        val expired = state.trials.filter { !now().isBefore(it.expiresAt) }
+        if (expired.isEmpty()) return
+        expired.forEach { store.deletePackage(it.sha256) }
+        update { s -> s.copy(trials = s.trials - expired.toSet()) }
+    }
 
     // ---- helpers ----
 
