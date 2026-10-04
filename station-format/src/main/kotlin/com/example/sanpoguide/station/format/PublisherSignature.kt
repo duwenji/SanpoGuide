@@ -34,26 +34,27 @@ object JcaEd25519 : Ed25519Verifier {
 
 /** A publisher's account id: `sg1` + the SHA-256 of the public key in base32, first 32 characters (API-001). */
 object AccountIds {
-    private const val ALPHABET = "abcdefghijklmnopqrstuvwxyz234567"
-
     fun of(publicKey: ByteArray): String {
         require(publicKey.size == 32) { "an Ed25519 public key is 32 bytes" }
         return "sg1" + base32(sha256(publicKey)).take(32)
     }
+}
 
-    private fun base32(bytes: ByteArray): String = buildString {
-        var buffer = 0
-        var bits = 0
-        for (b in bytes) {
-            buffer = (buffer shl 8) or (b.toInt() and 0xff)
-            bits += 8
-            while (bits >= 5) {
-                append(ALPHABET[(buffer shr (bits - 5)) and 31])
-                bits -= 5
-            }
+private const val BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567"
+
+/** Lower-case RFC 4648 base32 without padding, as the account and provider ids use. */
+internal fun base32(bytes: ByteArray): String = buildString {
+    var buffer = 0
+    var bits = 0
+    for (b in bytes) {
+        buffer = (buffer shl 8) or (b.toInt() and 0xff)
+        bits += 8
+        while (bits >= 5) {
+            append(BASE32_ALPHABET[(buffer shr (bits - 5)) and 31])
+            bits -= 5
         }
-        if (bits > 0) append(ALPHABET[(buffer shl (5 - bits)) and 31])
     }
+    if (bits > 0) append(BASE32_ALPHABET[(buffer shl (5 - bits)) and 31])
 }
 
 internal fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
