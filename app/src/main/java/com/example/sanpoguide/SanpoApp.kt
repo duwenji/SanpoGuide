@@ -19,6 +19,7 @@ import com.example.sanpoguide.prompt.PromptTemplates
 import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.station.BuiltInStations
 import com.example.sanpoguide.station.StationRepository
+import com.example.sanpoguide.station.remote.ThirdPartyChannels
 import com.example.sanpoguide.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,9 @@ class SanpoApp : Application() {
     lateinit var spots: SpotRepository
         private set
     lateinit var stations: StationRepository
+        private set
+    /** Third parties' channels from the providers the user added (ADR-001 T-5). */
+    lateinit var channels: ThirdPartyChannels
         private set
     lateinit var guides: GuideRepository
         private set
@@ -62,7 +66,9 @@ class SanpoApp : Application() {
         settings = SettingsRepository(this)
         spots = SpotRepository(OverpassClient())
         prompts = Prompts.fromResources()
-        stations = StationRepository(BuiltInStations.load(), settings.settings, appScope)
+        channels = ThirdPartyChannels(this, BuiltInStations.standardPackage(), appScope)
+        stations = StationRepository(BuiltInStations.load(), settings.settings, appScope, channels.stations)
+        channels.refreshIfDue()
         guides = GuideRepository(settings, prompts, station = { stations.current.value })
         speaker = Speaker(this)
         photos = SpotPhotos(this)

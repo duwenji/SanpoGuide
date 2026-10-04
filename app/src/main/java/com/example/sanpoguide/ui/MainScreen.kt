@@ -84,6 +84,7 @@ fun MainScreen(
     onToggleWalk: (walking: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenChannels: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val liveWalk by viewModel.liveWalk.collectAsStateWithLifecycle()
@@ -142,7 +143,12 @@ fun MainScreen(
                 return@Column
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            StationPicker(station, viewModel.stations, viewModel::chooseStation, Modifier.padding(horizontal = 16.dp))
+            val stations by viewModel.stations.collectAsStateWithLifecycle()
+            val notices by viewModel.channelNotices.collectAsStateWithLifecycle()
+            StationPicker(station, stations, viewModel::chooseStation, Modifier.padding(horizontal = 16.dp))
+            notices.lastOrNull()?.let { notice ->
+                Banner("チャンネルのお知らせ: ${notice.text}（タップして確認）", onOpenChannels)
+            }
             if (walking || lines.isNotEmpty()) {
                 // The scene is part of walk mode, not something to look at while walking.
                 CompanionCard(liveWalk, lines, scene = mood.takeIf { settings.moodEnabled && walking })

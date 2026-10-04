@@ -84,6 +84,8 @@ class WalkService : LifecycleService() {
                 this, NOTIFICATION_ID, walkingNotification("いってらっしゃい。近くに来たらお知らせします"),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
             )
+            // Lists are fetched when a walk starts if a day has passed, never during it (API-002 取得の時期).
+            app.channels.refreshIfDue()
             val s = WalkSession()
             s.startStation(app.stations.current.value.key)
             session = s

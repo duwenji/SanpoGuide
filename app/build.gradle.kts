@@ -86,6 +86,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.anthropic:anthropic-java:2.34.0")
     implementation(project(":station-format"))
+    // Ed25519 from Android 8 (the platform has it only from 13): third-party channels' signatures
+    // (ADR-001 T-5), and later API-001.
+    implementation("com.google.crypto.tink:tink-android:1.23.0")
 
     testImplementation("junit:junit:4.13.2")
     // The real org.json; Android's is a stub in local unit tests.
