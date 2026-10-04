@@ -48,6 +48,9 @@ class Station(
     val manifest: StationManifest get() = pkg.manifest
     val name: String get() = manifest.name
 
+    /** The name as screens show it: a channel on trial says so (API-002 試用チケット). */
+    val displayName: String get() = if (source?.trial == true) "$name（審査前の試用）" else name
+
     /** How often the companion speaks up on this channel. */
     val talkLevel: TalkLevel get() = overrides.talkLevel ?: defaultTalkLevel
     val defaultTalkLevel: TalkLevel get() = TalkLevel.valueOf(manifest.talkLevel.name)
@@ -100,5 +103,8 @@ class Station(
     fun eventInstructions(kind: TalkEventKind): String? = StationPrompts.eventInstructions(slots, kind)
 }
 
-/** Where a third party's channel comes from, for the screens (API-002 `publisherName`, the provider's name). */
-data class StationSource(val providerId: String, val providerName: String, val publisherName: String)
+/**
+ * Where a third party's channel comes from, for the screens (API-002 `publisherName`, the provider's
+ * name). [trial] marks a package read from a test ticket, before review (API-002 試用チケット).
+ */
+data class StationSource(val providerId: String, val providerName: String, val publisherName: String, val trial: Boolean = false)

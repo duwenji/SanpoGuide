@@ -7,10 +7,14 @@ import com.example.sanpoguide.SanpoApp
 import com.example.sanpoguide.station.remote.ChannelNotice
 import com.example.sanpoguide.station.remote.ChannelSyncException
 import com.example.sanpoguide.station.remote.ProviderView
+import com.example.sanpoguide.station.remote.TrialChannel
 import com.example.sanpoguide.walk.WalkService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** The providers the user added and the channels they deliver (API-002 設定画面の提供元). */
@@ -22,6 +26,9 @@ class ChannelsViewModel(application: Application) : AndroidViewModel(application
     val notices: StateFlow<List<ChannelNotice>> = channels.notices
     val busy: StateFlow<Boolean> = channels.busy
     val walking: StateFlow<Boolean> = WalkService.walking
+    val trials: StateFlow<List<TrialChannel>> = channels.trials
+    val developerMode: StateFlow<Boolean> = app.settings.settings.map { it.developerMode }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, app.settings.settings.value.developerMode)
 
     private val _message = MutableStateFlow<String?>(null)
     /** The outcome of the last action that failed, in the user's words. */
@@ -41,6 +48,18 @@ class ChannelsViewModel(application: Application) : AndroidViewModel(application
     fun update(providerId: String, channelId: String) = act { channels.install(providerId, channelId) }
     fun remove(providerId: String, channelId: String) = act { channels.uninstall(providerId, channelId) }
     fun dismissNotices() = act { channels.dismissNotices() }
+
+    /** A test ticket from the QR code: the trial channel becomes the one in use. */
+    fun loadTicket(text: String) = act {
+        val id = channels.loadTicket(text)
+        app.settings.save(app.settings.settings.value.copy(stationId = id))
+    }
+
+    fun removeTrial(providerId: String, channelId: String) = act { channels.removeTrial(providerId, channelId) }
+
+    fun showMessage(text: String) {
+        _message.value = text
+    }
     fun clearMessage() {
         _message.value = null
     }

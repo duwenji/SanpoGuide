@@ -24,6 +24,9 @@ import com.example.sanpoguide.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 
@@ -66,7 +69,8 @@ class SanpoApp : Application() {
         settings = SettingsRepository(this)
         spots = SpotRepository(OverpassClient())
         prompts = Prompts.fromResources()
-        channels = ThirdPartyChannels(this, BuiltInStations.standardPackage(), appScope)
+        val developerMode = settings.settings.map { it.developerMode }.stateIn(appScope, SharingStarted.Eagerly, settings.settings.value.developerMode)
+        channels = ThirdPartyChannels(this, BuiltInStations.standardPackage(), appScope, developerMode)
         stations = StationRepository(BuiltInStations.load(), settings.settings, appScope, channels.stations)
         channels.refreshIfDue()
         guides = GuideRepository(settings, prompts, station = { stations.current.value })

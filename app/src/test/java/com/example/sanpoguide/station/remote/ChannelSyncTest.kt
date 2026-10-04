@@ -231,6 +231,58 @@ class ChannelSyncTest {
         assertTrue(sync.stations(standard).isEmpty())
         assertTrue(folder.root.resolve("pkg").listFiles().orEmpty().isEmpty())
     }
+
+    /** A package on the trial path and a ticket for it, as the console issues one (API-002 試用チケット). */
+    private fun ticketFor(publisher: TestPublisher, version: Int, channel: String = "kamakura-history", days: Long = 7, ticketPublisher: String = publisher.accountId): String {
+        val zip = publisher.packageZip("kamakura-history", version)
+        val sha = sha256(zip)
+        files["$base/trial/$sha.zip"] = zip
+        val pkg = JSONObject().put("url", "$base/trial/$sha.zip").put("sha256", sha).put("size", zip.size).put("format", 1)
+        return provider.ticket(channel, ticketPublisher, pkg, clock, days)
+    }
+
+    @Test
+    fun `a test ticket gives a trial channel in developer mode only, until it expires`() {
+        publish(1)
+        sync.addProvider(base, provider.id)
+        val ticket = ticketFor(alice, 4)
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticket, developerMode = false) }
+
+        val id = sync.loadTicket(ticket, developerMode = true)
+        assertEquals("trial:${provider.id}/kamakura-history", id)
+        assertTrue(sync.stations(standard, developerMode = false).isEmpty())
+        val trial = sync.stations(standard, developerMode = true).single()
+        assertEquals(id, trial.id)
+        assertTrue(trial.source!!.trial)
+        assertEquals("鎌倉歴史散歩（審査前の試用）", trial.displayName)
+        assertEquals(4, trial.manifest.version)
+
+        // A newer ticket for the same channel replaces it; an expired one is gone.
+        sync.loadTicket(ticketFor(alice, 5), developerMode = true)
+        assertEquals(1, sync.state.trials.size)
+        assertEquals(5, sync.stations(standard, developerMode = true).single().manifest.version)
+        clock = clock.plus(Duration.ofDays(8))
+        assertTrue(sync.stations(standard, developerMode = true).isEmpty())
+        publish(2, issuedAt = clock)
+        sync.refreshDue(unmetered = false)
+        assertTrue(sync.state.trials.isEmpty())
+        assertTrue(folder.root.resolve("pkg").listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun `a test ticket is refused from an unknown provider, past 7 days, or for another channel or publisher`() {
+        val ticket = ticketFor(alice, 1)
+        assertTrue(assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticket, true) }.message!!.contains("先に足して"))
+        publish(1)
+        sync.addProvider(base, provider.id)
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticketFor(alice, 1, days = 8), true) }
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticketFor(alice, 1, channel = "other-channel"), true) }
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticketFor(alice, 1, ticketPublisher = bob.accountId), true) }
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket("not a ticket", true) }
+        assertTrue(sync.state.trials.isEmpty())
+        clock = clock.plus(Duration.ofDays(8))
+        assertThrows(ChannelSyncException::class.java) { sync.loadTicket(ticket, true) }
+    }
 }
 
 private val b64 = Base64.getUrlEncoder().withoutPadding()
@@ -265,6 +317,13 @@ private class TestProvider {
         return JSONObject().put("provider", id).put("name", "検証用の提供元").put("versions", JSONArray(listOf("v1"))).put("list", "/v1/channels.json")
             .put("rootKey", b64.encodeToString(root.raw())).put("keyset", signed(keyset, id, root)).toString()
     }
+
+    fun ticket(channel: String, publisher: String, pkg: JSONObject, issuedAt: Instant, days: Long = 7, provider: String = id): String =
+        signed(
+            JSONObject().put("type", "test-ticket").put("provider", provider).put("channel", channel).put("publisher", publisher).put("package", pkg)
+                .put("issuedAt", issuedAt.toString()).put("expiresAt", issuedAt.plus(Duration.ofDays(days)).toString()),
+            "k-1", signing,
+        ).toString()
 
     fun list(seq: Int, channels: JSONArray, revoked: JSONArray, issuedAt: Instant, expiresAt: Instant): String {
         val body = JSONObject().put("type", "channel-list").put("format", 1).put("provider", id).put("seq", seq)

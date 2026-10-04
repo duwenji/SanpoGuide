@@ -46,6 +46,11 @@ data class GuideSettings(
     val mapStyle: MapStyle = MapStyle.GSI_STANDARD,
     /** The user's own Google Maps Platform key (Map Tiles API), for the Google map styles. */
     val googleMapsApiKey: String = "",
+    /**
+     * For publishers trying their channel before review: test tickets can be read (API-002).
+     * Turned on by tapping the version seven times; saved at once, not with the rest of the settings.
+     */
+    val developerMode: Boolean = false,
 ) {
     fun apiKey(p: Provider = provider): String = apiKeys[p].orEmpty()
     fun model(p: Provider = provider): String = models[p]?.takeIf { it.isNotBlank() } ?: p.defaultModel
@@ -66,6 +71,12 @@ class SettingsRepository(context: Context) {
 
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<GuideSettings> = _settings.asStateFlow()
+
+    /** Saved at once, apart from [save]'s draft, which leaves it as it is. */
+    fun setDeveloperMode(on: Boolean) {
+        prefs.edit { putBoolean(KEY_DEVELOPER_MODE, on) }
+        _settings.value = load()
+    }
 
     fun save(settings: GuideSettings) {
         prefs.edit {
@@ -137,6 +148,7 @@ class SettingsRepository(context: Context) {
                 ?.let { name -> MapStyle.entries.firstOrNull { it.name == name } }
                 ?: DEFAULTS.mapStyle,
             googleMapsApiKey = prefs.getString(KEY_GOOGLE_MAPS_KEY, null)?.let(KeyCipher::decrypt).orEmpty(),
+            developerMode = prefs.getBoolean(KEY_DEVELOPER_MODE, DEFAULTS.developerMode),
         )
     }
 
@@ -205,6 +217,7 @@ class SettingsRepository(context: Context) {
         const val KEY_SHARE_LOCATION_WITH_AI = "share_location_with_ai"
         const val KEY_MAP_STYLE = "map_style"
         const val KEY_GOOGLE_MAPS_KEY = "google_maps_api_key"
+        const val KEY_DEVELOPER_MODE = "developer_mode"
         val DEFAULTS = GuideSettings()
     }
 }

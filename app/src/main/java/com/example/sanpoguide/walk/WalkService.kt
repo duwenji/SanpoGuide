@@ -32,6 +32,7 @@ import com.example.sanpoguide.prompt.Prompts
 import com.example.sanpoguide.settings.Threshold
 import com.example.sanpoguide.sound.AmbientPlayer
 import com.example.sanpoguide.sound.Soundscape
+import com.example.sanpoguide.station.Station
 import com.example.sanpoguide.station.format.TalkEventKind
 import com.example.sanpoguide.ui.MainActivity
 import com.google.android.gms.location.LocationCallback
@@ -88,6 +89,8 @@ class WalkService : LifecycleService() {
             app.channels.refreshIfDue()
             val s = WalkSession()
             s.startStation(app.stations.current.value.key)
+            // A channel on trial says so first (API-002 試用チケット).
+            app.stations.current.value.takeIf { it.source?.trial == true }?.let { s.pendingGreeting = trialNotice(it) + it.manifest.greeting }
             session = s
             app.feed.startWalk(s)
             startLocationUpdates()
@@ -149,10 +152,12 @@ class WalkService : LifecycleService() {
         app.stations.current.collect { station ->
             val s = session ?: return@collect
             if (s.stations.lastOrNull()?.station == station.key) return@collect
-            s.switchStation(station.key, station.manifest.greeting)
+            s.switchStation(station.key, trialNotice(station) + station.manifest.greeting)
             maybeTalk()
         }
     }
+
+    private fun trialNotice(station: Station) = if (station.source?.trial == true) "審査前の試用のチャンネルです。" else ""
 
     private fun onLocation(location: Location) {
         val s = session ?: return

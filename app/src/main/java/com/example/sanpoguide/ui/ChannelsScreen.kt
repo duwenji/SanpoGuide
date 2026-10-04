@@ -34,12 +34,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.sanpoguide.station.remote.ListedStatus
 import com.example.sanpoguide.station.remote.ListedView
 import com.example.sanpoguide.station.remote.ProviderView
+import com.example.sanpoguide.station.remote.TrialChannel
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -54,6 +59,8 @@ fun ChannelsScreen(viewModel: ChannelsViewModel, onClose: () -> Unit) {
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val walking by viewModel.walking.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val developerMode by viewModel.developerMode.collectAsStateWithLifecycle()
+    val trials by viewModel.trials.collectAsStateWithLifecycle()
     var adding by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
@@ -96,6 +103,7 @@ fun ChannelsScreen(viewModel: ChannelsViewModel, onClose: () -> Unit) {
                 // Never during a walk (API-002 取得の時期).
                 OutlinedButton(onClick = viewModel::refresh, enabled = !busy && !walking && providers.isNotEmpty()) { Text("今すぐ確かめる") }
             }
+            if (developerMode) TrialSection(trials, viewModel, enabled = !busy)
         }
     }
     if (adding) AddProviderDialog(onDismiss = { adding = false }, onAdd = { url, id -> viewModel.addProvider(url, id) { adding = false } })
@@ -161,6 +169,37 @@ private fun ChannelRow(providerId: String, view: ListedView, viewModel: Channels
                 ListedStatus.UNSUPPORTED -> Text("このアプリでは使えない形式です", style = MaterialTheme.typography.bodySmall)
             }
             if (view.installed != null) TextButton(onClick = { viewModel.remove(providerId, c.id) }, enabled = enabled) { Text("削除") }
+        }
+    }
+}
+
+/** Developer mode: a publisher's own channel before review, from a test ticket's QR code (API-002 試用チケット). */
+@Composable
+private fun TrialSection(trials: List<TrialChannel>, viewModel: ChannelsViewModel, enabled: Boolean) {
+    val context = LocalContext.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("試用チケット（開発者向け）", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "管理システムの配信元の画面で発行した QR コードを読み込むと、審査前のチャンネルを 7 日まで試せます。" +
+                    "チケットの提供元を先に足しておいてください。試用中のチャンネルは「審査前の試用」と表示し、ほかの人とは共有できません。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(
+                enabled = enabled,
+                onClick = {
+                    val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+                    GmsBarcodeScanning.getClient(context, options).startScan()
+                        .addOnSuccessListener { code -> code.rawValue?.let(viewModel::loadTicket) }
+                        .addOnFailureListener { viewModel.showMessage("QR コードを読み取れませんでした（${it.message}）") }
+                },
+            ) { Text("QR コードを読み込む") }
+            trials.forEach { t ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${t.name}（版 ${t.version}、${TIME.format(t.expiresAt)} まで）", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { viewModel.removeTrial(t.provider, t.id) }, enabled = enabled) { Text("削除") }
+                }
+            }
         }
     }
 }

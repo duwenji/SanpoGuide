@@ -39,6 +39,17 @@ data class InstalledChannel(
     val name: String = "",
 )
 
+/** A package read from a test ticket (developer mode only), usable until the ticket expires. */
+data class TrialChannel(
+    val provider: String,
+    val id: String,
+    val version: Int,
+    val publisher: String,
+    val sha256: String,
+    val name: String,
+    val expiresAt: Instant,
+)
+
 /** Something the user should hear about once: a channel withdrawn, its publisher's key moved, a list expired. */
 data class ChannelNotice(val at: Instant, val text: String)
 
@@ -46,6 +57,7 @@ data class ChannelState(
     val providers: List<ProviderRecord> = emptyList(),
     val installed: List<InstalledChannel> = emptyList(),
     val notices: List<ChannelNotice> = emptyList(),
+    val trials: List<TrialChannel> = emptyList(),
 )
 
 /** Keeps [ChannelState] in `state.json` and the packages as `pkg/{sha256}.zip` under [dir]. */
@@ -89,6 +101,10 @@ class ChannelStore(private val dir: File) {
                 .put("publisher", c.publisher).put("sha256", c.sha256).putOpt("blocked", c.blocked).put("name", c.name)
         }))
         .put("notices", JSONArray(state.notices.map { JSONObject().put("at", it.at.toString()).put("text", it.text) }))
+        .put("trials", JSONArray(state.trials.map { t ->
+            JSONObject().put("provider", t.provider).put("id", t.id).put("version", t.version).put("publisher", t.publisher)
+                .put("sha256", t.sha256).put("name", t.name).put("expiresAt", t.expiresAt.toString())
+        }))
 
     private fun decode(o: JSONObject) = ChannelState(
         providers = o.optJSONArray("providers").objects().map { p ->
@@ -104,6 +120,9 @@ class ChannelStore(private val dir: File) {
             InstalledChannel(c.getString("provider"), c.getString("id"), c.getInt("version"), c.getString("publisher"), c.getString("sha256"), c.str("blocked"), c.optString("name"))
         },
         notices = o.optJSONArray("notices").objects().map { ChannelNotice(Instant.parse(it.getString("at")), it.getString("text")) },
+        trials = o.optJSONArray("trials").objects().map { t ->
+            TrialChannel(t.getString("provider"), t.getString("id"), t.getInt("version"), t.getString("publisher"), t.getString("sha256"), t.getString("name"), Instant.parse(t.getString("expiresAt")))
+        },
     )
 }
 
