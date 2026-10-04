@@ -39,8 +39,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val prompts = (application as SanpoApp).prompts
     private val stationRepo = (application as SanpoApp).stations
 
-    /** Every channel, in the order to list them. */
-    val stations: List<Station> = stationRepo.all
+    /** Every channel usable now, in the order to list them. */
+    val stations: StateFlow<List<Station>> = stationRepo.list
 
     private val _draft = MutableStateFlow(repo.settings.value)
     val draft: StateFlow<GuideSettings> = _draft.asStateFlow()
@@ -59,6 +59,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setModel(model: String) = edit { it.copy(models = it.models + (it.provider to model)) }
     fun setCustomBaseUrl(url: String) = edit { it.copy(customBaseUrl = url) }
     fun selectStation(id: String) = edit { it.copy(stationId = id) }
+
+    /** After the channels screen: takes the channel chosen there, keeping the rest of the draft. */
+    fun takeSavedStation() = _draft.update { it.copy(stationId = repo.settings.value.stationId) }
 
     /** The chosen channel as the draft would have it, with the user's changes applied. */
     fun draftStation(settings: GuideSettings): Station = stationRepo.select(settings)

@@ -23,6 +23,7 @@ import com.example.sanpoguide.mood.Mood
 import com.example.sanpoguide.settings.GuideSettings
 import com.example.sanpoguide.settings.MapStyle
 import com.example.sanpoguide.station.Station
+import com.example.sanpoguide.station.remote.ChannelNotice
 import com.example.sanpoguide.walk.WalkService
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -85,7 +86,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val mood: StateFlow<Mood> = app.mood.mood
 
     val station: StateFlow<Station> = app.stations.current
-    val stations: List<Station> get() = app.stations.all
+    val stations: StateFlow<List<Station>> = app.stations.list
+
+    /** Things to tell the user about third-party channels (withdrawn, publisher's key moved, list expired). */
+    val channelNotices: StateFlow<List<ChannelNotice>> = app.channels.notices
 
     /** Saved at once: mid-walk, the walk service picks the switch up and the new channel says hello. */
     fun chooseStation(id: String) = app.settings.save(app.settings.settings.value.copy(stationId = id))

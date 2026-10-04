@@ -33,15 +33,19 @@ data class StationOverrides(
  *
  * @param key identifies the channel and its version, e.g. `builtin:standard@1`; it keys caches
  *   and the walk history, so a new version doesn't reuse narrations made for the old one.
+ * @param id how settings name the channel: the manifest's id for a built-in one,
+ *   `{provider id}/{channel id}` for a third party's (ids are unique only within a provider).
+ * @param source who delivers a third party's channel; null for a built-in one.
  */
 class Station(
     private val pkg: StationPackage,
     private val standard: StationPackage,
     val key: String,
     val overrides: StationOverrides = StationOverrides(),
+    val id: String = pkg.manifest.id,
+    val source: StationSource? = null,
 ) {
     val manifest: StationManifest get() = pkg.manifest
-    val id: String get() = manifest.id
     val name: String get() = manifest.name
 
     /** How often the companion speaks up on this channel. */
@@ -71,7 +75,7 @@ class Station(
     val isBuiltIn: Boolean get() = manifest.publisher == null
 
     fun withOverrides(overrides: StationOverrides) =
-        Station(pkg, standard, key, if (isBuiltIn) normalize(overrides) else StationOverrides())
+        Station(pkg, standard, key, if (isBuiltIn) normalize(overrides) else StationOverrides(), id, source)
 
     /** [overrides] without the values that equal this channel's own, so only real changes are kept. */
     fun normalize(overrides: StationOverrides): StationOverrides = StationOverrides(
@@ -95,3 +99,6 @@ class Station(
     /** This channel's extra instructions for [kind], appended after the event's own prompt; null if none. */
     fun eventInstructions(kind: TalkEventKind): String? = StationPrompts.eventInstructions(slots, kind)
 }
+
+/** Where a third party's channel comes from, for the screens (API-002 `publisherName`, the provider's name). */
+data class StationSource(val providerId: String, val providerName: String, val publisherName: String)

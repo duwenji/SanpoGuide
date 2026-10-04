@@ -70,8 +70,9 @@ import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit, onOpenChannels: () -> Unit) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val stations by viewModel.stations.collectAsStateWithLifecycle()
     val test by viewModel.test.collectAsStateWithLifecycle()
     val provider = draft.provider
 
@@ -164,7 +165,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
             val station = viewModel.draftStation(draft)
             SectionTitle("チャンネル")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                viewModel.stations.forEach { s ->
+                stations.forEach { s ->
                     FilterChip(
                         selected = station.id == s.id,
                         onClick = { viewModel.selectStation(s.id) },
@@ -177,29 +178,40 @@ fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            station.source?.let { source ->
+                Text(
+                    "配信: ${source.publisherName}（提供元: ${source.providerName}）。話しかけの頻度や場面は配信元が決めます",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 "チャンネルによって、語り手や話題、話しかける場面が変わります。" +
                     "天気の急変・日の入り・施設の案内は、どのチャンネルでもお知らせします。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            OutlinedButton(onClick = onOpenChannels) { Text("配信されているチャンネル・提供元") }
 
-            SectionTitle("散歩中の話しかけ（${station.name}）")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TalkLevel.entries.forEach { level ->
-                    FilterChip(
-                        selected = station.talkLevel == level,
-                        onClick = { viewModel.setTalkLevel(level) },
-                        label = { Text(level.label) },
-                    )
+            // A third party's channel is as its publisher made it (ADR-001): nothing to adjust here.
+            if (station.isBuiltIn) {
+                SectionTitle("散歩中の話しかけ（${station.name}）")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TalkLevel.entries.forEach { level ->
+                        FilterChip(
+                            selected = station.talkLevel == level,
+                            onClick = { viewModel.setTalkLevel(level) },
+                            label = { Text(level.label) },
+                        )
+                    }
                 }
+                Text(
+                    "スポットの案内のほかに、歩いた距離や時間、休憩のときに話しかける頻度です。チャンネルごとに保存します。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                StationSettings(station, viewModel)
             }
-            Text(
-                "スポットの案内のほかに、歩いた距離や時間、休憩のときに話しかける頻度です。チャンネルごとに保存します。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (station.isBuiltIn) StationSettings(station, viewModel)
 
             SectionTitle("雰囲気・背景音・写真")
             SwitchRow(

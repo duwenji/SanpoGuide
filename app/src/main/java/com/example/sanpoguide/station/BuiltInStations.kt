@@ -15,6 +15,9 @@ object BuiltInStations {
     /** In the order the app lists them. */
     val IDS = BuiltInChannels.IDS
 
+    /** The standard channel's package: third-party channels fill the slots they leave empty from it. */
+    fun standardPackage(files: (String) -> StationFiles = BuiltInChannels::files) = BuiltInChannels.read(STANDARD, files(STANDARD))
+
     /** Loads every built-in channel; [files] gives the files of one channel by id. */
     fun load(files: (String) -> StationFiles = BuiltInChannels::files): List<Station> {
         val packages = IDS.associateWith { id -> BuiltInChannels.read(id, files(id)) }

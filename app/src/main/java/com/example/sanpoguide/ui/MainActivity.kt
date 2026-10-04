@@ -25,8 +25,9 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: HistoryViewModel by viewModels()
+    private val channelsViewModel: ChannelsViewModel by viewModels()
 
-    private enum class Screen { MAIN, SETTINGS, HISTORY }
+    private enum class Screen { MAIN, SETTINGS, HISTORY, CHANNELS }
     private var hasLocationPermission by mutableStateOf(false)
 
     private val permissionLauncher = registerForActivityResult(
@@ -54,9 +55,24 @@ class MainActivity : ComponentActivity() {
             val mood by viewModel.mood.collectAsStateWithLifecycle()
             MoodTheme(mood.takeIf { settings.moodEnabled }, systemDark = isSystemInDarkTheme()) {
                 var screen by rememberSaveable { mutableStateOf(Screen.MAIN) }
-                if (screen != Screen.MAIN) BackHandler { screen = Screen.MAIN }
+                // The channels screen opens from the main screen or the settings, and goes back there.
+                var channelsFrom by rememberSaveable { mutableStateOf(Screen.MAIN) }
+                fun openChannels(from: Screen) {
+                    channelsViewModel.clearMessage()
+                    channelsFrom = from
+                    screen = Screen.CHANNELS
+                }
+                fun closeChannels() {
+                    if (channelsFrom == Screen.SETTINGS) settingsViewModel.takeSavedStation()
+                    screen = channelsFrom
+                }
+                if (screen == Screen.CHANNELS) BackHandler { closeChannels() } else if (screen != Screen.MAIN) BackHandler { screen = Screen.MAIN }
                 when (screen) {
-                    Screen.SETTINGS -> SettingsScreen(settingsViewModel, onClose = { screen = Screen.MAIN })
+                    Screen.SETTINGS -> SettingsScreen(
+                        settingsViewModel, onClose = { screen = Screen.MAIN },
+                        onOpenChannels = { openChannels(Screen.SETTINGS) },
+                    )
+                    Screen.CHANNELS -> ChannelsScreen(channelsViewModel, onClose = ::closeChannels)
                     Screen.HISTORY -> HistoryScreen(historyViewModel, onClose = { screen = Screen.MAIN })
                     Screen.MAIN -> MainScreen(
                         viewModel = viewModel,
@@ -73,6 +89,7 @@ class MainActivity : ComponentActivity() {
                             screen = Screen.SETTINGS
                         },
                         onOpenHistory = { screen = Screen.HISTORY },
+                        onOpenChannels = { openChannels(Screen.MAIN) },
                     )
                 }
             }
