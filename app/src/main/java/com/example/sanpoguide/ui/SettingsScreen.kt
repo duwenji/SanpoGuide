@@ -516,7 +516,8 @@ private fun StationSettings(station: Station, viewModel: SettingsViewModel) {
         }
     }
     Text(
-        "近くに複数のスポットがあるとき、選んだ種類から先に話題にします。",
+        "近くに複数のスポットがあるとき、選んだ種類から先に話題にします。" +
+            "飲食店から専門店までは、選んだときだけ探して地図と一覧に出します（チェーン店は除きます）。",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

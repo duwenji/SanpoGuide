@@ -67,6 +67,9 @@ class Station(
     val preferredCategories: Set<String> get() = prefer.map { it.category }.toSet()
     val skippedCategories: Set<String> get() = skip.map { it.category }.toSet()
 
+    /** Kinds the spot search adds while this channel is in use (eating and shopping, only when preferred). */
+    val searchedKinds: Set<SpotKind> get() = prefer.filter { it.onlyWhenPreferred }.toSet()
+
     val guideLength: GuideLength get() = overrides.guideLength ?: manifest.guideLength
 
     /** Whether the companion's tone follows the mood. */

@@ -11,8 +11,8 @@
 | 作成日 | 2026-10-03 |
 | 作成者 | Claude（開発者との検討） |
 | 承認者 | 開発者（2026-10-03） |
-| ステータス | 承認済 |
-| 版 | 1.0 |
+| ステータス | 1.1 承認待ち（1.0 は承認済） |
+| 版 | 1.1 |
 
 ## 目的・背景
 
@@ -160,8 +160,24 @@ resources/                   パッケージに入れる素材（任意）
 | `beach` | 海辺 | `natural=beach` |
 | `water` | 水辺 | `natural=water` |
 | `nature` | 自然 | そのほかの `natural=*`（木・山頂・湧き水） |
+| `restaurant` | 飲食店 | `amenity=restaurant` |
+| `cafe` | カフェ | `amenity=cafe` / `ice_cream` |
+| `sweets` | 菓子・パン | `shop=confectionery` / `pastry` / `bakery` / `chocolate` |
+| `food_shop` | 食品店 | `shop=deli` / `tea` / `coffee` / `alcohol` / `wine` / `seafood` / `butcher` / `greengrocer` / `cheese` / `spices` / `tofu` / `rice` |
+| `market` | 市場 | `amenity=marketplace` |
+| `crafts` | 工芸・土産 | `shop=craft` / `gift` / `antiques` / `art` |
+| `shop` | 専門店 | `shop=books` / `second_hand` / `stationery` / `fabric` / `clothes` / `shoes` / `bag` / `jewelry` / `leather` / `musical_instrument` / `music` / `toys` / `florist` / `kitchen` / `interior_decoration` |
 
-`prefer` は、散策中にどのスポットから話題にするかの順位を変える（今の `Poi.notability` に加点する）。検索するスポットの種類は変わらない（Overpass への負荷を増やさないため）。種類を足すときは本書の版を上げずに表に足し、アプリが知らない値は拒む（古いアプリには、そのチャンネルが出ない）。
+`prefer` は、散策中にどのスポットから話題にするかの順位を変える（今の `Poi.notability` に加点する）。検索するスポットの種類は、`restaurant` から `shop` までの 7 種類（飲食・買い物。以下「店の種類」）を除いて変わらない（Overpass への負荷を増やさないため）。
+
+店の種類は、選んでいるチャンネルの `prefer` に入っているときだけ検索に加える（1.1 で追加。どのチャンネルでも検索すると、街なかでは地図が店で埋まり、負荷も全員分増えるため）。
+
+- 名前のある店だけ。コンビニ・スーパーなどの種類は対象に入れず、OSM で `brand` / `brand:wikidata` が付いた店（チェーン店）も除く
+- ほかのスポットより狭く、半径 400m（最大 60 件）で探す
+- チャンネルを切り替えて店の種類が変わったら、その場で検索し直す
+- 共通の指示（「特定の商品・店舗・サービスの購入や利用を勧めない」）はそのまま。店は土地の名物・食文化・ものづくりの紹介として話し、勧めない（審査基準 2.4 と同じ扱い）
+
+種類を足すときは本書の版を上げずに表に足し、アプリが知らない値は拒む（古いアプリには、そのチャンネルが出ない）。
 
 ## プロンプトのスロット
 
@@ -484,3 +500,4 @@ API-002 の `package_rejected` の詳細の理由。審査用の道具は同じ�
 | 2026-10-03 | 0.1 | 草案 | Claude |
 | 2026-10-03 | 0.2 | 素材・きっかけ・見せ方の章を追加（M-1〜M-3、F-8〜F-13） | Claude |
 | 2026-10-03 | 1.0 | 「第三者の媒体」の統合（M-4）を追加。F-1〜F-13 を決定事項にして承認 | Claude（承認: 開発者） |
+| 2026-10-05 | 1.1 | スポットの種類に店の種類 7 つ（飲食・買い物）を追加。店の種類は `prefer` に入れたチャンネルでだけ検索し、チェーン店を除く（開発者の選択による）。station-format 1.3.0 | Claude |
