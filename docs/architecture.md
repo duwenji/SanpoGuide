@@ -139,7 +139,7 @@ flowchart LR
 
 ## 図 5 · 地図: ルートと向き
 
-地図には、案内中のスポットまでの道と、ユーザーの向いている方向を描く。どちらも画面（`MainViewModel` と `SpotMap`）だけの処理で、`WalkService` は案内したスポットを `CompanionFeed.guiding` に出すだけ。
+地図には、案内中のスポットまでの道と、今回の散策で歩いた道と、ユーザーの向いている方向を描く。どれも画面（`MainViewModel` と `SpotMap`）だけの処理で、`WalkService` は案内したスポットを `CompanionFeed.guiding` に、歩いた道を `CompanionFeed.walked` に出すだけ。
 
 ```mermaid
 flowchart LR
@@ -157,6 +157,7 @@ flowchart LR
 
 - ルートを取得するあいだは直線を仮に描き、地図左上のラベルに「ルートを検索中…」と出す。
 - 経路サービスには現在地とスポットの緯度経度を送る。AI に位置を送るかどうかの設定（`shareLocationWithAi`）とは別で、ルート表示には常に送る。
+- 歩いた道は `WalkSession` が記録している経路（8m 以上動くごとに 1 点、最大 3,000 点）をそのまま、案内の青い線の下にピンクの線で描く。散策を終えると消える。
 - 方位センサーは画面が表示されている間だけ動かす。向きが 3° 以上変わったときだけ描き直す。
 - 扇形の画像は 5° ごとに 1 枚作り、使い回す。
 
@@ -238,6 +239,7 @@ flowchart LR
 | 施設案内の条件を変える | `companion/FacilityAdvisor.kt` |
 | AI サービスを追加する | OpenAI 互換なら `guide/Provider.kt` に 1 行。独自 API なら `LlmClient` を実装して `GuideRepository.createClient` に分岐を足す |
 | 検索するスポットの種類を変える | `data/OverpassClient.kt` |
+| 地図の歩いた道の表示を変える | `companion/CompanionFeed.kt` の `walked`（いつ更新するか）・`ui/SpotMap.kt`（描画） |
 | 地図のルート表示（対象・再検索の条件）を変える | `ui/MainViewModel.kt` の `updateRoute()`。経路サービスは `data/RouteClient.kt` |
 | 地図の種類を追加・変更する | `settings/MapStyle.kt`（設定の選択肢）・`ui/MapTiles.kt`（地図画像の URL と出典）。Google は `data/GoogleMapTiles.kt` |
 | 地図の向きの表示を変える | `ui/Heading.kt`（向きの取得）・`ui/SpotMap.kt`（描画） |

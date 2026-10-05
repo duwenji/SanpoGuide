@@ -96,6 +96,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val liveWalk: StateFlow<LiveWalk?> = app.feed.live
     val companionLines: StateFlow<List<Utterance>> = app.feed.lines
+    val walked: StateFlow<List<LatLon>> = app.feed.walked
 
     val spots: StateFlow<List<SpotItem>> = combine(
         app.spots.spots, app.spots.location, app.history.walks,

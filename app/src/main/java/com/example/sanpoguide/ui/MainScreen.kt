@@ -100,6 +100,7 @@ fun MainScreen(
     val nearestFacilities by viewModel.nearestFacilities.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     val route by viewModel.route.collectAsStateWithLifecycle()
+    val walked by viewModel.walked.collectAsStateWithLifecycle()
     val map by viewModel.map.collectAsStateWithLifecycle()
     val googleCopyright by viewModel.googleCopyright.collectAsStateWithLifecycle()
     val mood by viewModel.mood.collectAsStateWithLifecycle()
@@ -179,6 +180,7 @@ fun MainScreen(
                     heading = rememberHeading(location),
                     spots = spots,
                     facilities = facilities,
+                    walked = walked,
                     route = route,
                     focus = focus,
                     onSpotClick = viewModel::select,

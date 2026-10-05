@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import com.example.sanpoguide.R
 import com.example.sanpoguide.data.Facility
 import com.example.sanpoguide.data.FacilityKind
+import com.example.sanpoguide.history.LatLon
 import org.osmdroid.events.DelayedMapListener
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
@@ -58,7 +59,7 @@ fun facilityColor(kind: FacilityKind) = when (kind) {
 
 /**
  * Map showing the user's position (with the way they face, [heading]), nearby spots and
- * amenities, and the way to the spot being guided to. Pans to [focus] when it changes.
+ * amenities, the way already [walked] on this walk, and the way to the spot being guided to. Pans to [focus] when it changes.
  * [onViewportChanged] reports the area on screen (zoom, north, south, east, west) once the
  * map settles, for attributions that depend on it.
  */
@@ -69,6 +70,7 @@ fun SpotMap(
     heading: Float?,
     spots: List<SpotItem>,
     facilities: List<FacilityItem>,
+    walked: List<LatLon>,
     route: RouteToSpot?,
     focus: Facility?,
     onSpotClick: (SpotItem) -> Unit,
@@ -153,6 +155,23 @@ fun SpotMap(
         map.overlays.clear()
         // Under the spots, so a bench in a park doesn't cover the park.
         map.overlays += markers.facilities
+        // A single point is only where the walk began; the position dot already shows it.
+        if (walked.size >= 2) {
+            val track = markers.walked ?: Polyline(map).apply {
+                outlinePaint.color = WALKED_COLOR
+                outlinePaint.strokeWidth = 4 * density
+                outlinePaint.strokeCap = Paint.Cap.ROUND
+                outlinePaint.strokeJoin = Paint.Join.ROUND
+                infoWindow = null
+            }.also { markers.walked = it }
+            // The list is replaced only when the walk has grown, so this skips most updates.
+            if (walked !== markers.walkedPoints) {
+                track.setPoints(walked.map { GeoPoint(it.lat, it.lon) })
+                markers.walkedPoints = walked
+            }
+            // Under the way ahead, which matters more while walking.
+            map.overlays += track
+        }
         if (route != null) {
             val line = markers.route ?: Polyline(map).apply {
                 outlinePaint.color = ROUTE_COLOR
@@ -201,6 +220,8 @@ private class MapMarkers {
     var onSpotClick: (SpotItem) -> Unit = {}
     var me: Marker? = null
     var route: Polyline? = null
+    var walked: Polyline? = null
+    var walkedPoints: List<LatLon>? = null
     var tiles: MapTiles? = null
     private val headingIcons = HashMap<Int, Drawable>()
 
@@ -223,6 +244,8 @@ private fun reportViewportOf(
     report(map.zoomLevelDouble.toInt(), box.latNorth, box.latSouth, box.lonEast, box.lonWest)
 }
 private const val ROUTE_COLOR = 0xCC1E88E5.toInt()
+/** The way walked: apart from the blue of the way ahead and the position dot. */
+private const val WALKED_COLOR = 0xB3D81B60.toInt()
 
 /** Same dot as `me_dot`, with a fading beam behind it. Canvas rotation is clockwise, like compass degrees. */
 private fun drawHeadingIcon(context: Context, degrees: Float): Drawable {

@@ -90,6 +90,12 @@ class WalkSession(val startedAt: Long = System.currentTimeMillis()) {
         trackRest(location)
     }
 
+    /** How many points of the route walked so far have been recorded; grows as the user walks. */
+    val routeSize: Int get() = route.size
+
+    /** The route walked so far, every recorded point (a copy). */
+    fun walkedRoute(): List<LatLon> = route.toList()
+
     /** The route walked so far, cut down to at most [maxPoints] evenly spread points; ends at the latest one. */
     fun routeSketch(maxPoints: Int): List<LatLon> = RouteGeometry.thin(route, maxPoints)
 
