@@ -72,6 +72,10 @@ class StationAssetsTest {
         assertEquals(setOf(TalkEventKind.START, TalkEventKind.FINISH), TalkEventKind.entries.filter(quiet::talksOn).toSet())
         assertEquals(setOf("寺院", "神社", "史跡", "博物館"), byId.getValue("history").preferredCategories)
         assertTrue("公園" in byId.getValue("nature").preferredCategories)
+        // Eating and shopping are searched for only on the channels that prefer them.
+        assertEquals(setOf(SpotKind.RESTAURANT, SpotKind.CAFE, SpotKind.SWEETS, SpotKind.FOOD_SHOP, SpotKind.MARKET), byId.getValue("gourmet").searchedKinds)
+        assertEquals(setOf(SpotKind.CRAFTS, SpotKind.SHOP, SpotKind.MARKET, SpotKind.SWEETS), byId.getValue("shopping").searchedKinds)
+        listOf("standard", "history", "nature", "quiet").forEach { assertEquals(emptySet<SpotKind>(), byId.getValue(it).searchedKinds) }
         assertTrue(prompts.render(Prompts.Guide.SYSTEM, byId.getValue("history").guideSystemVars()).contains("300〜450字程度"))
         // A channel without slots of its own speaks with the standard channel's voice.
         assertEquals(standard.slot(Slot.GUIDE_PERSONA), quiet.slot(Slot.GUIDE_PERSONA))

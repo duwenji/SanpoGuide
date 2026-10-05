@@ -11,7 +11,7 @@ object BuiltInChannels {
     const val STANDARD = "standard"
 
     /** In the order the app lists them. */
-    val IDS = listOf(STANDARD, "history", "nature", "quiet")
+    val IDS = listOf(STANDARD, "history", "nature", "gourmet", "shopping", "quiet")
 
     /**
      * Every file under [RESOURCE_DIR], one relative path per line. Written by the build

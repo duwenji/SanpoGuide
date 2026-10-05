@@ -3,6 +3,7 @@ package com.example.sanpoguide
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.util.Log
 import com.example.sanpoguide.companion.WalkCompanion
 import com.example.sanpoguide.companion.CompanionFeed
 import com.example.sanpoguide.companion.WeatherClient
@@ -25,6 +26,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -67,12 +70,23 @@ class SanpoApp : Application() {
         Configuration.getInstance().userAgentValue = "SanpoGuide/${BuildConfig.VERSION_NAME} (Android)"
 
         settings = SettingsRepository(this)
-        spots = SpotRepository(OverpassClient())
+        // The channel decides which shops to search for; read when searching, after start-up.
+        spots = SpotRepository(OverpassClient(), shops = { stations.current.value.searchedKinds })
         prompts = Prompts.fromResources()
         val developerMode = settings.settings.map { it.developerMode }.stateIn(appScope, SharingStarted.Eagerly, settings.settings.value.developerMode)
         channels = ThirdPartyChannels(this, BuiltInStations.standardPackage(), appScope, developerMode)
         stations = StationRepository(BuiltInStations.load(), settings.settings, appScope, channels.stations)
         channels.refreshIfDue()
+        appScope.launch {
+            // A switch to or from a channel that prefers shops shows them, or clears them, right away.
+            stations.current.map { it.searchedKinds }.distinctUntilChanged().drop(1).collect {
+                try {
+                    spots.onShopsChanged()
+                } catch (e: Exception) {
+                    Log.w("SanpoApp", "Spot search after a channel switch failed", e)
+                }
+            }
+        }
         guides = GuideRepository(settings, prompts, station = { stations.current.value })
         speaker = Speaker(this)
         photos = SpotPhotos(this)

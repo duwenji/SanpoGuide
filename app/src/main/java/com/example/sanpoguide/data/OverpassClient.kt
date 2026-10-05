@@ -1,6 +1,7 @@
 package com.example.sanpoguide.data
 
 import android.util.Log
+import com.example.sanpoguide.station.format.SpotKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -23,35 +24,10 @@ class OverpassClient(
         .readTimeout(30, TimeUnit.SECONDS)
         .build(),
 ) {
-    suspend fun search(lat: Double, lon: Double, radiusM: Int = 600): NearbyResult =
+    /** [shops]: eating and shopping kinds to add (`SpotKind.onlyWhenPreferred`); none by default. */
+    suspend fun search(lat: Double, lon: Double, radiusM: Int = 600, shops: Set<SpotKind> = emptySet()): NearbyResult =
         withContext(Dispatchers.IO) {
-            val around = "around:$radiusM,$lat,$lon"
-            // Benches and vending machines are everywhere; only the close ones matter.
-            val closeAround = "around:${minOf(radiusM, CLOSE_RADIUS_M)},$lat,$lon"
-            val open = """["access"!~"^(private|no)$"]"""
-            // Machines that sell nothing a walker needs (tickets, parking, cigarettes, ...).
-            val usefulVending = """["vending"!~"ticket|parking|cigarette|excrement|condom|newspaper|fuel|photo"]"""
-            val query = """
-                [out:json][timeout:25];
-                (
-                  nwr($around)["name"]["historic"];
-                  nwr($around)["name"]["tourism"~"^(attraction|museum|viewpoint|artwork|gallery)$"];
-                  nwr($around)["name"]["amenity"="place_of_worship"];
-                  nwr($around)["name"]["leisure"~"^(park|garden)$"];
-                  nwr($around)["name"]["natural"~"^(tree|peak|spring|water|beach)$"];
-                );
-                out tags geom 80;
-                nwr($around)["amenity"="toilets"]$open;
-                out center 40;
-                nwr($around)["amenity"="drinking_water"]$open;
-                out center 40;
-                nwr($around)["amenity"="shelter"]$open;
-                out center 40;
-                nwr($closeAround)["amenity"="bench"];
-                out center 40;
-                nwr($closeAround)["amenity"="vending_machine"]$usefulVending;
-                out center 40;
-            """.trimIndent()
+            val query = query(lat, lon, radiusM, shops)
 
             // Public Overpass servers are often busy (429/504); fall through to the next mirror.
             var lastError: IOException? = null
@@ -81,7 +57,51 @@ class OverpassClient(
             throw lastError!!
         }
 
-    private fun parse(json: String): NearbyResult {
+    internal fun query(lat: Double, lon: Double, radiusM: Int, shops: Set<SpotKind>): String {
+        val around = "around:$radiusM,$lat,$lon"
+        // Benches and vending machines are everywhere; only the close ones matter.
+        val closeAround = "around:${minOf(radiusM, CLOSE_RADIUS_M)},$lat,$lon"
+        val open = """["access"!~"^(private|no)$"]"""
+        // Machines that sell nothing a walker needs (tickets, parking, cigarettes, ...).
+        val usefulVending = """["vending"!~"ticket|parking|cigarette|excrement|condom|newspaper|fuel|photo"]"""
+        val query = """
+            [out:json][timeout:25];
+            (
+              nwr($around)["name"]["historic"];
+              nwr($around)["name"]["tourism"~"^(attraction|museum|viewpoint|artwork|gallery)$"];
+              nwr($around)["name"]["amenity"="place_of_worship"];
+              nwr($around)["name"]["leisure"~"^(park|garden)$"];
+              nwr($around)["name"]["natural"~"^(tree|peak|spring|water|beach)$"];
+            );
+            out tags geom 80;
+            nwr($around)["amenity"="toilets"]$open;
+            out center 40;
+            nwr($around)["amenity"="drinking_water"]$open;
+            out center 40;
+            nwr($around)["amenity"="shelter"]$open;
+            out center 40;
+            nwr($closeAround)["amenity"="bench"];
+            out center 40;
+            nwr($closeAround)["amenity"="vending_machine"]$usefulVending;
+            out center 40;
+        """.trimIndent()
+
+        return if (shops.isEmpty()) query else query + "\n" + shopQuery(lat, lon, radiusM, shops)
+    }
+
+    /**
+     * Named places to eat and shop, without chains: convenience stores and supermarkets aren't
+     * asked for, and anything OSM marks with a brand is left out. Searched closer than the other
+     * spots, since a busy street has hundreds.
+     */
+    private fun shopQuery(lat: Double, lon: Double, radiusM: Int, kinds: Set<SpotKind>): String {
+        val around = "around:${minOf(radiusM, SHOP_RADIUS_M)},$lat,$lon"
+        val noChain = """[!"brand"][!"brand:wikidata"]"""
+        val lines = kinds.mapNotNull { SHOP_FILTERS[it] }.joinToString("\n") { "  nwr($around)[\"name\"]$it$noChain;" }
+        return "(\n$lines\n);\nout tags center $SHOP_LIMIT;"
+    }
+
+    internal fun parse(json: String): NearbyResult {
         val elements = JSONObject(json).getJSONArray("elements")
         val result = LinkedHashMap<String, Poi>()
         val facilities = mutableListOf<Facility>()
@@ -97,11 +117,15 @@ class OverpassClient(
                 continue
             }
             val name = tags["name:ja"] ?: tags["name"] ?: continue
-            val (lat, lon) = if (e.has("lat")) {
-                e.getDouble("lat") to e.getDouble("lon")
-            } else {
-                val b = e.optJSONObject("bounds") ?: continue
-                (b.getDouble("minlat") + b.getDouble("maxlat")) / 2 to (b.getDouble("minlon") + b.getDouble("maxlon")) / 2
+            val center = e.optJSONObject("center")
+            val (lat, lon) = when {
+                e.has("lat") -> e.getDouble("lat") to e.getDouble("lon")
+                // Shops come with `out center` (no outline needed); the other spots with `out geom`.
+                center != null -> center.getDouble("lat") to center.getDouble("lon")
+                else -> {
+                    val b = e.optJSONObject("bounds") ?: continue
+                    (b.getDouble("minlat") + b.getDouble("maxlat")) / 2 to (b.getDouble("minlon") + b.getDouble("maxlon")) / 2
+                }
             }
             val id = "${e.getString("type")}/${e.getLong("id")}"
             val poi = Poi(id, name, lat, lon, categoryOf(tags), tags, shapeOf(e, tags))
@@ -177,7 +201,14 @@ class OverpassClient(
         tags["natural"] == "beach" -> "海辺"
         tags["natural"] == "water" -> "水辺"
         tags.containsKey("natural") -> "自然"
-        else -> "スポット"
+        else -> shopKindOf(tags)?.category ?: "スポット"
+    }
+
+    private fun shopKindOf(tags: Map<String, String>): SpotKind? = when {
+        tags["amenity"] == "restaurant" -> SpotKind.RESTAURANT
+        tags["amenity"] == "cafe" || tags["amenity"] == "ice_cream" -> SpotKind.CAFE
+        tags["amenity"] == "marketplace" -> SpotKind.MARKET
+        else -> SHOP_TAGS.entries.firstOrNull { (_, values) -> tags["shop"] in values }?.key
     }
 
     private fun elapsed(since: Long) = System.currentTimeMillis() - since
@@ -186,6 +217,29 @@ class OverpassClient(
         private const val TAG = "Overpass"
         private const val CLOSE_RADIUS_M = 250
         private const val SAME_FACILITY_M = 20f
+        private const val SHOP_RADIUS_M = 400
+        private const val SHOP_LIMIT = 60
+
+        /** The `shop=*` values of each kind; chains' kinds (convenience, supermarket, ...) are in none. */
+        internal val SHOP_TAGS: Map<SpotKind, Set<String>> = mapOf(
+            SpotKind.SWEETS to setOf("confectionery", "pastry", "bakery", "chocolate"),
+            SpotKind.FOOD_SHOP to setOf(
+                "deli", "tea", "coffee", "alcohol", "wine", "seafood", "butcher", "greengrocer",
+                "cheese", "spices", "tofu", "rice",
+            ),
+            SpotKind.CRAFTS to setOf("craft", "gift", "antiques", "art"),
+            SpotKind.SHOP to setOf(
+                "books", "second_hand", "stationery", "fabric", "clothes", "shoes", "bag", "jewelry",
+                "leather", "musical_instrument", "music", "toys", "florist", "kitchen", "interior_decoration",
+            ),
+        )
+
+        /** The Overpass filter for each eating and shopping kind. */
+        internal val SHOP_FILTERS: Map<SpotKind, String> = mapOf(
+            SpotKind.RESTAURANT to """["amenity"="restaurant"]""",
+            SpotKind.CAFE to """["amenity"~"^(cafe|ice_cream)$"]""",
+            SpotKind.MARKET to """["amenity"="marketplace"]""",
+        ) + SHOP_TAGS.mapValues { (_, values) -> """["shop"~"^(${values.joinToString("|")})$"]""" }
         private val ENDPOINTS = listOf(
             "https://overpass-api.de/api/interpreter",
             "https://overpass.private.coffee/api/interpreter",

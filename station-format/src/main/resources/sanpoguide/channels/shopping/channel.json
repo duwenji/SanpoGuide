@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "id": "shopping",
+  "version": 1,
+  "name": "ショッピング",
+  "summary": "工芸・土産の店や専門店、市場をめぐり、土地のものづくりや商店街の話を多めに",
+  "lang": "ja",
+  "greeting": "ここからは、お店をのぞきながら歩きましょう。",
+  "talk": {
+    "level": "normal",
+    "events": { "spot": true, "revisit": true, "milestone": true, "rest": true, "start": true, "finish": true }
+  },
+  "spots": { "prefer": ["crafts", "shop", "market", "sweets"], "skip": [] },
+  "guide": { "length": "normal" },
+  "mood": { "tone": true, "sound": "auto" }
+}

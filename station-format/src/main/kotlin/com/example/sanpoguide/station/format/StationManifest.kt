@@ -44,8 +44,12 @@ enum class SoundChoice(override val json: String) : JsonValue {
     AUTO("auto"), RAIN("rain"), WAVES("waves"), WIND("wind"), BIRDS("birds"), INSECTS("insects"), TEMPLE("temple"),
 }
 
-/** Spot kinds, matching the app's categories (`OverpassClient.categoryOf`). */
-enum class SpotKind(override val json: String, val category: String) : JsonValue {
+/**
+ * Spot kinds, matching the app's categories (`OverpassClient.categoryOf`). Kinds marked
+ * [onlyWhenPreferred] (eating and shopping) are searched for only while the channel in use
+ * prefers them: everywhere else they'd crowd the map and add to the search's load.
+ */
+enum class SpotKind(override val json: String, val category: String, val onlyWhenPreferred: Boolean = false) : JsonValue {
     SHRINE("shrine", "神社"),
     TEMPLE("temple", "寺院"),
     CHURCH("church", "教会"),
@@ -61,4 +65,11 @@ enum class SpotKind(override val json: String, val category: String) : JsonValue
     BEACH("beach", "海辺"),
     WATER("water", "水辺"),
     NATURE("nature", "自然"),
+    RESTAURANT("restaurant", "飲食店", onlyWhenPreferred = true),
+    CAFE("cafe", "カフェ", onlyWhenPreferred = true),
+    SWEETS("sweets", "菓子・パン", onlyWhenPreferred = true),
+    FOOD_SHOP("food_shop", "食品店", onlyWhenPreferred = true),
+    MARKET("market", "市場", onlyWhenPreferred = true),
+    CRAFTS("crafts", "工芸・土産", onlyWhenPreferred = true),
+    SHOP("shop", "専門店", onlyWhenPreferred = true),
 }
