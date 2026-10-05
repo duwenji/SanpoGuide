@@ -1,6 +1,7 @@
 package com.example.sanpoguide.companion
 
 import com.example.sanpoguide.data.Poi
+import com.example.sanpoguide.history.LatLon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,8 +34,13 @@ class CompanionFeed {
     /** The spot the current walk last introduced; the map shows the way to it. Null outside walk mode. */
     val guiding: StateFlow<Poi?> = _guiding.asStateFlow()
 
+    private val _walked = MutableStateFlow<List<LatLon>>(emptyList())
+    /** The way walked so far on the current walk, for the map; empty outside walk mode. */
+    val walked: StateFlow<List<LatLon>> = _walked.asStateFlow()
+
     fun startWalk(session: WalkSession) {
         _lines.value = emptyList()
+        _walked.value = emptyList()
         _talkedAbout.value = emptySet()
         _guiding.value = null
         update(session)
@@ -43,12 +49,15 @@ class CompanionFeed {
     fun update(session: WalkSession) {
         _live.value = LiveWalk(session.startedAt, session.distanceM, session.visits.size)
         _talkedAbout.value = session.talkedAbout.toSet()
+        // Points are added only every few meters; copy the route only when it has grown.
+        if (session.routeSize != _walked.value.size) _walked.value = session.walkedRoute()
     }
 
     fun endWalk() {
         _live.value = null
         _weather.value = null
         _guiding.value = null
+        _walked.value = emptyList()
     }
 
     fun updateWeather(weather: Weather?) {
