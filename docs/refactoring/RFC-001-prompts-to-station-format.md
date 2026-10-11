@@ -34,8 +34,8 @@
 |---|---|---|
 | R-1 | ファイルの置き場所 | `station-format/src/main/resources/sanpoguide/{prompts,channels}/` を正本にする。アプリは AssetManager ではなくクラスパスから読む（開発者の決定） |
 | R-2 | ZIP の展開・配信元の署名の確認（API-003 の手順 2・4） | 今回は入れない。別の PR で（開発者の決定） |
-| R-3 | 公開の座標 | `com.example.sanpoguide:station-format`。版は `gradle.properties` の `stationFormatVersion`（アプリの版とは別）。タグ `station-format-v<版>` で GitHub Actions が公開する（開発者の決定） |
-| R-4 | パッケージ名 | Kotlin のパッケージ名は変えない（`com.example.sanpoguide.prompt`）。アプリの import を変えずに済む |
+| R-3 | 公開の座標 | `com.example.sanpoguide:station-format`（2.0.0 から `io.github.duwenji.sanpoguide:station-format`。1.1 を参照）。版は `gradle.properties` の `stationFormatVersion`（アプリの版とは別）。タグ `station-format-v<版>` で GitHub Actions が公開する（開発者の決定） |
+| R-4 | パッケージ名 | Kotlin のパッケージ名は変えない（`com.example.sanpoguide.prompt`）。アプリの import を変えずに済む。**2026-10-11 に変更**: Google Play 向けに `applicationId` を `io.github.duwenji.sanpoguide` にしたのに合わせ、`namespace`・Kotlin のパッケージ・公開の group もすべて `io.github.duwenji.sanpoguide` にした（station-format 2.0.0。利用側は import と依存の座標を書き換える） |
 | R-5 | フォルダの一覧 | jar・APK の中のフォルダは一覧できないので、ビルド時に `sanpoguide/channels/index.txt` を作る（`channelIndex` タスク） |
 | R-6 | 改行 | `app/src/main/assets/**` と `station-format/src/main/resources/**` を `.gitattributes` で LF に固定する。Windows（`core.autocrlf=true`）で取り出すと組み込みのチャンネルが CR を含み、自分の確認に落ちていた |
 
@@ -75,3 +75,4 @@
 | 日付 | 版 | 変更内容 | 変更者 |
 |---|---|---|---|
 | 2026-10-03 | 1.0 | 作成・実施 | Claude |
+| 2026-10-11 | 1.1 | R-3・R-4 を変更。パッケージ名と公開の group を `io.github.duwenji.sanpoguide` にした（station-format 2.0.0） | Claude |

@@ -9,7 +9,7 @@ plugins {
     `maven-publish`
 }
 
-group = "com.example.sanpoguide"
+group = "io.github.duwenji.sanpoguide"
 version = providers.gradleProperty("stationFormatVersion").get()
 
 java {

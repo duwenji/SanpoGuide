@@ -206,7 +206,7 @@ flowchart LR
 
 ## パッケージ一覧
 
-パスは `app/src/main/java/com/example/sanpoguide/` からの相対。行数は空行・コメントを含む。
+パスは `app/src/main/java/io/github/duwenji/sanpoguide/` からの相対。行数は空行・コメントを含む。
 
 | パッケージ | 役割 | 主なファイル | 行数 |
 |---|---|---|---:|
@@ -223,7 +223,7 @@ flowchart LR
 | `station` | チャンネル（[channels.md](channels.md)）。組み込みのチャンネルの読み込み、利用者の変更の反映、プロンプトのスロットの値、画面の表示名 | Station, BuiltInStations, StationRepository, StationLabels | 244 |
 | (root) | 共有部品の生成、通知チャンネルの登録 | SanpoApp | 100 |
 
-チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認（第三者のパッケージの ZIP の展開と配信元の署名の確認を含む）、プロンプトのファイルと `PromptTemplates`、チャンネルのスロットからプロンプトを組み立てる `StationPrompts`、組み込みのチャンネルは、Android に依存しない別のモジュール `:station-format`（`station-format/`）にある。チャンネル管理システムの審査用の道具でも、同じ確認と同じプロンプトを使うため（GitHub Packages に `com.example.sanpoguide:station-format` として公開する）。ファイルは `station-format/src/main/resources/sanpoguide/` にあり、アプリはクラスパスから読む。
+チャンネルの形式（[API-003](channel-package-format.md)）の読み込みと確認（第三者のパッケージの ZIP の展開と配信元の署名の確認を含む）、プロンプトのファイルと `PromptTemplates`、チャンネルのスロットからプロンプトを組み立てる `StationPrompts`、組み込みのチャンネルは、Android に依存しない別のモジュール `:station-format`（`station-format/`）にある。チャンネル管理システムの審査用の道具でも、同じ確認と同じプロンプトを使うため（GitHub Packages に `io.github.duwenji.sanpoguide:station-format` として公開する）。ファイルは `station-format/src/main/resources/sanpoguide/` にあり、アプリはクラスパスから読む。
 
 ## 変更の入口: こうしたいときはここを開く
 
