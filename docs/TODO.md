@@ -236,6 +236,7 @@ ADR-001 と API-002 は 2026-10-03 に承認した（同日、1.1 の改訂も�
 - [x] API-002 の準拠テスト（確認観点 V-01〜V-09・V-15・V-16）。sanpo-channel-console の `conformance/`（2026-10-03）。開発用の提供元で合格
 - [x] プロンプト・`PromptTemplates`・組み込みのチャンネルを `:station-format` に移し、審査の見本（`ReviewSamples`）を足した。GitHub Packages に `com.example.sanpoguide:station-format` として公開する（2026-10-03、[RFC-001](refactoring/RFC-001-prompts-to-station-format.md)）
 - [x] `:station-format` に ZIP の展開と配信元の署名の確認（API-003 の手順 2・4）を足す（2026-10-04、station-format 1.1.0）。署名の確認は `Ed25519Verifier` を渡す（JVM は `JcaEd25519`。アプリは Android 8 で動く Tink の実装を、第三者のチャンネルの取り込み（ADR-001 T-5）のときに渡す）
+- [ ] 識別子を `io.github.duwenji.sanpoguide` に揃えた（2026-10-11）。`applicationId`（Google Play の ID）・`namespace`・Kotlin のパッケージ・station-format の group を変え、station-format を 2.0.0 にした（1.3.0 は未公開のまま 2.0.0 に含めた）。残り: タグ `station-format-v2.0.0` で公開、sanpo-channel-console の validator と sanpo-tutorial の追従。前の APK（`com.example.sanpoguide`）とは別のアプリになるので、実機は入れ直す
 - [ ] アプリ: リストの要約の確認（API-002 P-8）と、配信元の鍵の移し替えの受け入れ（P-9）を、提供元の実装（ADR-001 T-5）に含める
 
 決めたこと（2026-10-03）:
